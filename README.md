@@ -27,9 +27,9 @@ GaiaOS is an advanced, black-box environmental control system leveraging symboli
 - **Simulation Tools**: Deterministic diffusion simulators for robust testing (MapSimTextServ as a standalone application found at https://github.com/NT4-Wildbranch/MapSimTextServ
 
 
-Setting up and running an experiment with GaiaOS and viewing the results:
+## Setting up and running an experiment with GaiaOS and viewing the results:
 
-Steps:
+**Steps**:
 
 1. Clone the repository to your local machine.
 
