@@ -41,6 +41,12 @@ GaiaOS is an advanced, black-box environmental control system leveraging symboli
 
 5. From there use the "./Scripts/update.txt", "./control_panel.ssv", and "./autoexec.ssv" to control the server. Update runs every tick of the engine. Control panel runs when the "./Control_Panel_Flag.ssv" has '1' written to it. Autoexec runs on startup, this is the bootloader.
 
-6. This is setup right now, though fully customizable and changeable, for building a copy of the parallel project "MapSimTextServ" and merging the directories. GaiaOS is configurable through the files, and we are working to integrate all of the low level controls you'll see in the code into the scripting engine. You can use this as a standalone application and use the text file (and ssv for the system files) for input and output using batch scripting, python, or anything that can use file based IO.
+**Notes**:
+
+1. This is setup right now, though fully customizable and changeable, for building a copy of the parallel project "MapSimTextServ" and merging the directories. GaiaOS is configurable through the files, and we are working to integrate all of the low level controls you'll see in the code into the scripting engine. You can use this as a standalone application and use the text file (and ssv for the system files) for input and output using batch scripting, python, or anything that can use file based IO.
+
+2. The output commands are mostly not hooked up at the moment, currently core functionality. The priority for focus is going to be on implementing all of the functionality and updating the scripting engine. 
+
+@@ Outro
 
 If something doesn't work or there is a discrepancy please let me know at briarfisk@gmail.com so the issue can be investigated and the reason figured out. 
