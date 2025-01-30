@@ -19,7 +19,10 @@ jobs:
         run: |
           if [ $RUNNER_OS == 'Windows' ]; then
             choco install cmake
+          elif [ $RUNNER_OS == 'macOS' ]; then
+            brew install cmake
           else
+            sudo apt-get update
             sudo apt-get install -y build-essential cmake
           fi
 
@@ -33,7 +36,7 @@ jobs:
           fi
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4  # Fixed to the latest version
+        uses: actions/upload-artifact@v4
         with:
           name: nt4-binaries
           path: bin/**
