@@ -33,7 +33,7 @@ jobs:
           fi
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Fixed to the latest version
         with:
           name: nt4-binaries
           path: bin/**
