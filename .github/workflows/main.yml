@@ -41,3 +41,24 @@ jobs:
         with:
           name: ${{ matrix.os }}-${{ matrix.build_type }}
           path: build
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.sha }}
+          release_name: Cross-Platform Build
+          draft: false
+          prerelease: false
+
+      - name: Upload Binaries to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/my_executable
+          asset_name: my_executable_${{ matrix.os }}
+          asset_content_type: application/octet-stream
