@@ -24,15 +24,13 @@ jobs:
             sudo apt-get install -y build-essential cmake
           else
             echo "Skipping CMake installation on macOS (already available)."
-          
-      - name: Build the project
+
+      - name: Create build directory and run CMake
         run: |
-          if [ $RUNNER_OS == 'Windows' ]; then
-            builderman.bat
-          else
-            chmod +x builderman.sh
-            ./builderman.sh
-          fi
+          mkdir -p build
+          cd build
+          cmake ..
+          cmake --build .
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
