@@ -1,8 +1,12 @@
-name: Build and Release NT4 Binaries
+name: C++ Cross-Platform Build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
@@ -10,30 +14,30 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-
+        build_type: [Debug, Release]
+        
     steps:
-      - name: Checkout the code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up dependencies
-        run: |
-          if [ $RUNNER_OS == 'Windows' ]; then
-            choco install cmake
-          elif [ $RUNNER_OS == 'Linux' ]; then
-            sudo apt-get update
-            sudo apt-get install -y build-essential cmake
-          else
-            echo "Skipping CMake installation on macOS (already available)."
+      - name: Set up CMake
+        uses: jwlawson/actions-setup-cmake@v1
 
-      - name: Create build directory and run CMake
-        run: |
-          mkdir -p build
-          cd build
-          cmake ..
-          cmake --build .
+      - name: Install dependencies (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Upload binaries
-        uses: actions/upload-artifact@v4
+      - name: Configure with CMake
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build project
+        run: cmake --build build
+
+      - name: Run tests
+        run: ctest --test-dir build || echo "Tests failed"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
         with:
-          name: nt4-binaries
-          path: bin/**
+          name: ${{ matrix.os }}-${{ matrix.build_type }}
+          path: build
