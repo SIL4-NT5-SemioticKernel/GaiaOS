@@ -1,0 +1,39 @@
+name: Build and Release NT4 Binaries
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v3
+
+      - name: Set up dependencies
+        run: |
+          if [ $RUNNER_OS == 'Windows' ]; then
+            choco install cmake
+          else
+            sudo apt-get install -y build-essential cmake
+          fi
+
+      - name: Build the project
+        run: |
+          if [ $RUNNER_OS == 'Windows' ]; then
+            builderman.bat
+          else
+            chmod +x builderman.sh
+            ./builderman.sh
+          fi
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: nt4-binaries
+          path: bin/**
