@@ -17,10 +17,10 @@ public:
     std::vector<std::vector<u_Data>> Input_Interm;
     std::vector<std::vector<u_Data>> Output;
 
-    float MSC_APT;
-    float Chrono_APT;
-    float MSC_MC;
-    float Chrono_MC;
+    double MSC_APT;
+    double Chrono_APT;
+    double MSC_MC;
+    double Chrono_MC;
 
     std::vector<std::vector<std::vector<s_Out>>> Bulk;
 
@@ -42,12 +42,12 @@ public:
         Chrono_MC = 0.95;
     }
 
-    void set_MSC_APT(float p_APT)
+    void set_MSC_APT(double p_APT)
     {
         MSC_APT = p_APT;
     }
 
-    void set_Chrono_APT(float p_APT)
+    void set_Chrono_APT(double p_APT)
     {
         Chrono_APT = p_APT;
     }
@@ -176,7 +176,7 @@ public:
         }
         std::cout << "\n\n _~_ Bulk Match:";
 
-        float tmp_Count = 0;
+        double tmp_Count = 0;
 
         for (int cou_Raw = 0; cou_Raw < Raw_Depth; cou_Raw++)
         {
@@ -198,7 +198,7 @@ public:
 
     void calculate_Match_Use()
     {
-        float tmp_Count = 0;
+        double tmp_Count = 0;
 
         for (int cou_Raw = 0; cou_Raw < Raw_Depth; cou_Raw++)
         {
@@ -297,8 +297,8 @@ public:
     int Chrono_Current;
 
     //One per raw, used to generate the random predictions.
-    std::vector<float> Range_High;
-    std::vector<float> Range_Low;
+    std::vector<double> Range_High;
+    std::vector<double> Range_Low;
 
     c_Time_Series_Generator_Module()
     {
@@ -596,10 +596,10 @@ public:
     void eval(int p_RF)
     {
         //---validate_RF(p_RF);
-        NT4_Core.set_Action_Potential_Threshold("Chrono", RF[p_RF].Chrono_APT);
-        NT4_Core.set_Action_Potential_Threshold("MSC", RF[p_RF].MSC_APT);
-        NT4_Core.set_Modifier_Charge("Chrono", RF[p_RF].Chrono_MC);
-        NT4_Core.set_Modifier_Charge("MSC", RF[p_RF].MSC_MC);
+        NT4_Core.set_Action_Potential_Threshold("Chrono", float(RF[p_RF].Chrono_APT));
+        NT4_Core.set_Action_Potential_Threshold("MSC", float(RF[p_RF].MSC_APT));
+        NT4_Core.set_Modifier_Charge("Chrono", float(RF[p_RF].Chrono_MC));
+        NT4_Core.set_Modifier_Charge("MSC", float(RF[p_RF].MSC_MC));
 
         copy_Input(p_RF);
 
@@ -762,7 +762,7 @@ public:
         std::vector<uint64_t> tmp_Pattern;
         u_Data tmp_Bit;
 
-        float tmp_Total = 0.0;
+        double tmp_Total = 0.0;
         float tmp_Count = 0.0;
 
         //---std::cout << "\n\n\n  --==<<                                >>==-- ";
@@ -803,7 +803,7 @@ public:
                 tmp_Total = tmp_Total / tmp_Count;
             }
 
-            float tmp_Remainder = (tmp_Total - int(tmp_Total));
+            double tmp_Remainder = (tmp_Total - int(tmp_Total));
 
             int tmp_Total_Rounded = int(tmp_Total);
             if (tmp_Remainder > 0.5) { tmp_Total_Rounded++; }
@@ -843,7 +843,7 @@ public:
 
         //std::cout << "\n Random Projection[" << p_Raw << "] Low: " << Range_Low[p_Raw] << " High: " << Range_High[p_Raw];
 
-        int tmp_Diff = Range_High[p_Raw] - Range_Low[p_Raw];
+        int tmp_Diff = int(Range_High[p_Raw] - Range_Low[p_Raw]);
 
         for (int cou_Chrono = 0; cou_Chrono < Chrono_Depth; cou_Chrono++)
         {
@@ -860,7 +860,7 @@ public:
     }
 
     void output_IO(int p_RF)
-    {
+    { 
         //---validate_RF(p_RF);
 
         RF[p_RF].output_IO();

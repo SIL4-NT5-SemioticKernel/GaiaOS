@@ -8,7 +8,7 @@ public:
 
     //Data is stored as an array of uint64_t
     std::vector<uint64_t> Pattern;
-    double Charge;
+    float Charge;
     float RC;
     c_Node* Treetop;
 
@@ -57,7 +57,7 @@ public:
     {
         if (p_Index == -1)
         {
-            p_Index = Pattern.size() - 1;
+            p_Index = int(Pattern.size()) - 1;
         }
 
         //First get the concrete value.
@@ -65,7 +65,7 @@ public:
     }
 
     //Sets the Charge
-    void set_Charge(double p_Charge)
+    void set_Charge(float p_Charge)
     {
         Charge = p_Charge;
     }
@@ -103,7 +103,7 @@ public:
         if (p_Index >= Pattern.size()) { return 0; }
         if (p_Index == -1)
         {
-            p_Index = Pattern.size() - 1;
+            p_Index = int(Pattern.size()) - 1;
         }
 
         return Pattern[p_Index];
@@ -137,10 +137,10 @@ public:
     //Returns the pattern as a string.
     int get_Output_Pattern_Size()
     {
-        return Pattern.size();
+        return int(Pattern.size());
     }
 
-    double get_Charge()
+    float get_Charge()
     {
         return Charge;
     }
@@ -215,8 +215,8 @@ public:
 
     //Data is stored as an array of uint64_t
     uint64_t** Pattern;
-    double Charge;
-    double RC;
+    float Charge;
+    float RC;
     c_Node* Treetop;
 
     //The depth of the data.
@@ -311,13 +311,13 @@ public:
     }
 
     //Sets the Charge
-    void set_Charge(double p_Charge)
+    void set_Charge(float p_Charge)
     {
         Charge = p_Charge;
     }
 
     //Sets the RC
-    void set_RC(double p_RC)
+    void set_RC(float p_RC)
     {
         RC = p_RC;
     }
@@ -351,12 +351,12 @@ public:
         return Pattern[p_X][p_Y];
     }
 
-    double get_Charge()
+    float get_Charge()
     {
         return Charge;
     }
 
-    double get_RC()
+    float get_RC()
     {
         return RC;
     }
@@ -433,8 +433,8 @@ public:
 
     //Data is stored as an array of uint64_t
     uint64_t*** Pattern;
-    double Charge;
-    double RC;
+    float Charge;
+    float RC;
     c_Node* Treetop;
 
     //The depth of the data.
@@ -556,13 +556,13 @@ public:
     }
 
     //Sets the Charge
-    void set_Charge(double p_Charge)
+    void set_Charge(float p_Charge)
     {
         Charge = p_Charge;
     }
 
     //Sets the RC
-    void set_RC(double p_RC)
+    void set_RC(float p_RC)
     {
         RC = p_RC;
     }
@@ -599,12 +599,12 @@ public:
         return Pattern[p_X][p_Y][p_Z];
     }
 
-    double get_Charge()
+    float get_Charge()
     {
         return Charge;
     }
 
-    double get_RC()
+    float get_RC()
     {
         return RC;
     }

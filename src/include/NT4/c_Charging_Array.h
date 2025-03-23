@@ -11,7 +11,7 @@ public:
     //The next node in the chain.
     c_Charging_Linked_List* Next;
     c_Charging_Linked_List* Previous;
-    double Charge;
+    float Charge;
     c_Node* NID;
 
     c_Charging_Linked_List()
@@ -71,7 +71,7 @@ public:
     }
 
     //Adds a node.
-    c_Charging_Linked_List* new_LL(c_Node* p_NID, double p_Charge)
+    c_Charging_Linked_List* new_LL(c_Node* p_NID, float p_Charge)
     {
         c_Charging_Linked_List* tmp_LL = NULL;
 
@@ -401,14 +401,14 @@ public:
     int Input_Position;
 
     //Settings & trackers for the settings.
-    double Base_Charge;
-    double Current_Highest_Charge;
-    double Previous_Highest_Charge;
-    double Treetops_Highest_Charge;
+    float Base_Charge;
+    float Current_Highest_Charge;
+    float Previous_Highest_Charge;
+    float Treetops_Highest_Charge;
 
-    double Modifier_Charge;
-    double Action_Potential_Threshold;
-    double RC_Limiter;
+    float Modifier_Charge;
+    float Action_Potential_Threshold;
+    float RC_Limiter;
 
     c_Charging_Buffer()
     {
@@ -451,47 +451,47 @@ public:
     }
 
     //Hyperparameters
-    void set_Base_Charge(double p_Base_Charge)
+    void set_Base_Charge(float p_Base_Charge)
     {
         Base_Charge = p_Base_Charge;
     }
 
-    void set_Modifier_Charge(double p_Modifier_Charge)
+    void set_Modifier_Charge(float p_Modifier_Charge)
     {
         Modifier_Charge = p_Modifier_Charge;
     }
 
-    void set_Action_Potential_Threshold(double p_Action_Potential_Threshold)
+    void set_Action_Potential_Threshold(float p_Action_Potential_Threshold)
     {
         Action_Potential_Threshold = p_Action_Potential_Threshold;
     }
 
-    void set_RC_Limiter(double p_RC_Limiter)
+    void set_RC_Limiter(float p_RC_Limiter)
     {
         RC_Limiter = p_RC_Limiter;
     }
 
-    double get_Base_Charge()
+    float get_Base_Charge()
     {
         return Base_Charge;
     }
 
-    double get_Modifier_Charge()
+    float get_Modifier_Charge()
     {
         return Modifier_Charge;
     }
 
-    double get_Action_Potential_Threshold()
+    float get_Action_Potential_Threshold()
     {
         return Action_Potential_Threshold;
     }
 
-    double get_RC_Limiter()
+    float get_RC_Limiter()
     {
         return RC_Limiter;
     }
 
-    double get_Treetops_Highest_Charge()
+    float get_Treetops_Highest_Charge()
     {
         return Treetops_Highest_Charge;
     }
@@ -517,8 +517,8 @@ public:
         Previous_Highest_Charge = Current_Highest_Charge;
         Current_Highest_Charge = 0;
 
-        double tmp_Charge = 0;
-        double tmp_Charge_Percentage = 0.0f;
+        float tmp_Charge = 0;
+        float tmp_Charge_Percentage = 0.0f;
         float tmp_RC = 0.0f;
 
         while (tmp_LL != NULL)
@@ -539,7 +539,7 @@ public:
             tmp_Charge_Percentage = (((tmp_LL->Charge) * Modifier_Charge) / Previous_Highest_Charge);
             
             //---std::cout << "\n --- tmp_Charge_Percentage " << tmp_Charge_Percentage << " = ((tmp_LL->Charge " << tmp_LL->Charge << "  * Modifier_Charge " << Modifier_Charge << " ) / Previous_Highest_Charge " << Previous_Highest_Charge << " );";
-            tmp_Charge = double(tmp_Charge_Percentage * Base_Charge);
+            tmp_Charge = float(tmp_Charge_Percentage * Base_Charge);
 
             tmp_LL->NID->Charge = tmp_Charge;
 
@@ -554,7 +554,7 @@ public:
 
                     //---std::cout << "\n NID " << tmp_LL->NID->NID << " Axons[ " << cou_H << " ][ " << cou_A << " ]->Dendrite_Weights[ " << cou_A << " ] " << tmp_LL->NID->Axons[cou_H][cou_A]->Dendrite_Weights[cou_H];
 
-                    //This is for the double legged node charging, may separate out in the future as not all nodes need to do this.
+                    //This is for the float legged node charging, may separate out in the future as not all nodes need to do this.
                     submit(tmp_LL->NID->Axons[cou_H][cou_A], (tmp_Charge * tmp_LL->NID->Axons[cou_H][cou_A]->Dendrite_Weights[cou_H]));
                 }
             }
@@ -575,7 +575,7 @@ public:
 
     //Accepts a submission of nodes to charge, charges the given leg. Used mainly for Chrono.
     //Use this then gather and begin charging loop.
-    void charge_Given_Leg(c_Node* p_Node, double p_Charge = 10.00, int p_Leg = 0)
+    void charge_Given_Leg(c_Node* p_Node, float p_Charge = 10.00, int p_Leg = 0)
     {
         p_Node->Charge = p_Charge;
 
@@ -602,7 +602,7 @@ public:
     //Accepts a submission of nodes to charge, charges the given legs. Used mainly for Chrono.
     //Use this then gather and begin charging loop.
     //It is assumed p_Leg is the same depth as the input.
-    void charge_Given_Legs(c_Node* p_Node, int p_Leg_Count, int* p_Leg, double p_Charge = 10.00)
+    void charge_Given_Legs(c_Node* p_Node, int p_Leg_Count, int* p_Leg, float p_Charge = 10.00)
     {
         if (p_Node != NULL)
         {
@@ -630,7 +630,7 @@ public:
     //=====--              --=====//
 
     //Accepts a submission of nodes to charge, used for CAN.
-    void submit(c_Node* p_Node, double p_Charge = 10.00)
+    void submit(c_Node* p_Node, float p_Charge = 10.00)
     {
         if (p_Node == NULL) { std::cerr << "\n (o.O) Error! p_Node is NULL to submit!"; }
 
@@ -651,7 +651,7 @@ public:
         }
     }
     
-    void submit_Treetop(c_Node* p_Node, double p_Charge)
+    void submit_Treetop(c_Node* p_Node, float p_Charge)
     {
         if (p_Node == NULL) { std::cerr << "\n (O.O) Error! p_Node is NULL to submit_Treetop!"; }
 
@@ -710,16 +710,16 @@ public:
     }
 
     //Charges the outputs back into the charging buffer.
-    double gather_Treetopss()
+    float gather_Treetopss()
     {
         std::cout << "\n\n\n\n\n\n gather_Treetops()";
         c_Charging_Linked_List* tmp_LL = Treetops.Root;
         c_Charging_Linked_List_Handler tmp_Treetops_LLH;;
         tmp_Treetops_LLH.Root = Treetops.Root;
 
-        double tmp_Current_Highest_Charge = 0;
+        float tmp_Current_Highest_Charge = 0;
 
-        double tmp_Charge = 0;
+        float tmp_Charge = 0;
 
         //Find the current highest charge.
         while (tmp_LL != NULL)

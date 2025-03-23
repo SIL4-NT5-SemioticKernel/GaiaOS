@@ -867,7 +867,7 @@ public:
 		std::cout << "Allocating Memory...";
 		for (int cou_T = 0; cou_T < tmp_Top_Tier; cou_T++)
 		{
-			Skipdex_Cur[cou_T] = 0.0;
+			Skipdex_Cur[cou_T] = 0;
 			Skipdex_Val[cou_T] = Nodes.Fat_Tier / Skipdex[cou_T];
 
 			Skipdex_Out[cou_T].resize(Nodes.Fat_Tier);
@@ -1250,7 +1250,7 @@ public:
 
 	int get_Output_Depth(int p_Construct)
 	{
-		return Constructs[p_Construct]->CAN->Output.size();
+		return int(Constructs[p_Construct]->CAN->Output.size());
 	}
 
 	std::string get_Output_Pattern(int p_Construct, int p_Index)
@@ -1273,7 +1273,7 @@ public:
 		return (Constructs[p_Construct]->CAN->get_Output(p_Index))->get_Output_Pattern_Size();
 	}
 
-	double get_Output_Charge(int p_Construct, int p_Index)
+	float get_Output_Charge(int p_Construct, int p_Index)
 	{
 		return (Constructs[p_Construct]->CAN->get_Output(p_Index))->get_Charge();
 	}
@@ -1297,7 +1297,7 @@ public:
 	void pull_From_Lower_Connections(int p_Construct)
 	{
 		uint64_t* tmp_Final_Input = NULL;
-		std::vector<double> tmp_Charging_Mask;
+		std::vector<float> tmp_Charging_Mask;
 		int tmp_Dimension = 0;
 		int tmp_Input_Depth_Total = 0;
 		int tmp_Tick = 0;
@@ -1955,7 +1955,7 @@ public:
 		c_Node* tmp_Node;
 		tmp_Node = Nodes.Root;
 
-		int tmp_Loading_Bar = Nodes.Node_Count / 100;
+		int tmp_Loading_Bar = int(float(Nodes.Node_Count) / 100.0);
 		int tmp_NID = 0;
 		std::cout << "\n Saving: " << Nodes.Node_Count << " nodes.";
 		std::cout << "\n";
@@ -2012,9 +2012,9 @@ public:
 		std::string tmp_Type = "";
 		int tmp_State_Index = 0;
 
-		double tmp_Base_Charge = 0.0;
-		double tmp_Modifier_Charge = 0.0;
-		double tmp_Action_Potential_Threshold = 0.0;
+		float tmp_Base_Charge = 0.0;
+		float tmp_Modifier_Charge = 0.0;
+		float tmp_Action_Potential_Threshold = 0.0;
 		int tmp_Charging_Tier = 0;
 
 		for (int cou_Con = 0; cou_Con < tmp_Construct_Count; cou_Con++)
@@ -2056,7 +2056,7 @@ public:
 
 		std::cout << "\n Found " << tmp_Node_Count << " nodes.";
 
-		int tmp_Loading_Bar = tmp_Node_Count / 100;
+		int tmp_Loading_Bar = int(float(tmp_Node_Count) / 100.0);
 		std::cout << "\n";
 		for (int cou_Index = 0; cou_Index < 100; cou_Index++)
 		{
@@ -2271,7 +2271,7 @@ public:
 		std::ifstream config_File(Constructs[p_Construct]->Config_File);
 
 		std::string tmp_In = "";
-		double tmp_double = 0.0;
+		float tmp_float = 0.0;
 		int tmp_Int = 0;
 
 		// Check if the flag file exists and can be opened
@@ -2281,9 +2281,9 @@ public:
 			{
 				config_File >> tmp_In;
 
-				if (tmp_In == "Base_Charge") { config_File >> tmp_double; set_Base_Charge(p_Construct, tmp_double); }// std::cout << "\nSetting Base_Charge to " << tmp_double; }
-				if (tmp_In == "Modifier_Charge") { config_File >> tmp_double; set_Modifier_Charge(p_Construct, tmp_double); }//  std::cout << "\nSetting Modifier_Charge to " << tmp_double; }
-				if (tmp_In == "Action_Potential_Threshold") { config_File >> tmp_double; set_Action_Potential_Threshold(p_Construct, tmp_double); }//  std::cout << "\nSetting Action_Potential_Threshold to " << tmp_double; }
+				if (tmp_In == "Base_Charge") { config_File >> tmp_float; set_Base_Charge(p_Construct, tmp_float); }// std::cout << "\nSetting Base_Charge to " << tmp_float; }
+				if (tmp_In == "Modifier_Charge") { config_File >> tmp_float; set_Modifier_Charge(p_Construct, tmp_float); }//  std::cout << "\nSetting Modifier_Charge to " << tmp_float; }
+				if (tmp_In == "Action_Potential_Threshold") { config_File >> tmp_float; set_Action_Potential_Threshold(p_Construct, tmp_float); }//  std::cout << "\nSetting Action_Potential_Threshold to " << tmp_float; }
 				if (tmp_In == "Charging_Tier") { config_File >> tmp_Int; set_Charging_Tier(p_Construct, tmp_Int); }//  std::cout << "\nSetting Charging_Tier to " << tmp_Int; }
 			}
 		}
@@ -2301,23 +2301,23 @@ public:
 		Constructs[p_Construct]->CAN->output_Config();
 	}
 
-	void set_Input_Charging_Mask(const int p_Construct, std::vector<double> p_Input_Charging_Mask)
+	void set_Input_Charging_Mask(const int p_Construct, std::vector<float> p_Input_Charging_Mask)
 	{
 		Constructs[p_Construct]->CAN->set_Input_Charging_Mask(p_Input_Charging_Mask);
 	}
 
 	//Hyperparams
-	void set_Base_Charge(int p_Construct, double p_Base_Charge)
+	void set_Base_Charge(int p_Construct, float p_Base_Charge)
 	{
 		Constructs[p_Construct]->CAN->set_Base_Charge(p_Base_Charge);
 	}
 
-	void set_Modifier_Charge(int p_Construct, double p_Modifier_Charge)
+	void set_Modifier_Charge(int p_Construct, float p_Modifier_Charge)
 	{
 		Constructs[p_Construct]->CAN->set_Modifier_Charge(p_Modifier_Charge);
 	}
 
-	void set_Action_Potential_Threshold(int p_Construct, double p_Action_Potential_Threshold)
+	void set_Action_Potential_Threshold(int p_Construct, float p_Action_Potential_Threshold)
 	{
 		Constructs[p_Construct]->CAN->set_Action_Potential_Threshold(p_Action_Potential_Threshold);
 	}
@@ -2327,22 +2327,22 @@ public:
 		Constructs[p_Construct]->CAN->set_Charging_Tier(p_Charging_Tier);
 	}
 
-	double get_Base_Charge(int p_Construct)
+	float get_Base_Charge(int p_Construct)
 	{
 		return Constructs[p_Construct]->CAN->get_Base_Charge();
 	}
 
-	double get_Modifier_Charge(int p_Construct)
+	float get_Modifier_Charge(int p_Construct)
 	{
 		return Constructs[p_Construct]->CAN->get_Modifier_Charge();
 	}
 
-	double get_Action_Potential_Threshold(int p_Construct)
+	float get_Action_Potential_Threshold(int p_Construct)
 	{
 		return Constructs[p_Construct]->CAN->get_Action_Potential_Threshold();
 	}
 
-	double get_Charging_Tier(int p_Construct)
+	int get_Charging_Tier(int p_Construct)
 	{
 		return Constructs[p_Construct]->CAN->get_Charging_Tier();
 	}

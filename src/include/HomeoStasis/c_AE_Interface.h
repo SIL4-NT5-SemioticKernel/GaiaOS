@@ -48,10 +48,10 @@ public:
     c_Data* Delta;
 
     //The deviation state.
-    std::vector<float> Deviation;
+    std::vector<double> Deviation;
 
     //The current deviation from the goal concrete, and the deviation granulated.
-    float Goal_Deviation;
+    double Goal_Deviation;
 
     //The depth of the data.
     int Depth;
@@ -199,7 +199,7 @@ public:
         return Delta[p_Index].get_double();
     }
 
-    float get_Value_Deviation(int p_Index = -1)
+    double get_Value_Deviation(int p_Index = -1)
     {
         if (p_Index == -1)
         {

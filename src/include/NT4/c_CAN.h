@@ -27,7 +27,7 @@ public:
 	c_IO_Set Input;
 	c_2D_IO_Set Input_2D;
 	c_3D_IO_Set Input_3D;
-	std::vector<double> Input_Charging_Mask;
+	std::vector<float> Input_Charging_Mask;
 
 	//The output is an array of traces retrieved from charging the buffers.
 	std::vector<c_Trace> Output;
@@ -95,7 +95,7 @@ public:
 	{
 		if (get_Dimension() == 1)
 		{
-			return Output.size();
+			return int(Output.size());
 		}
 		if (get_Dimension() == 2)
 		{
@@ -160,7 +160,7 @@ public:
 	//Calculates and returns the number of current treetops.
 	int get_Output_Depth(int p_Index, int p_Dimension)
 	{
-		if (p_Dimension == 1) { return Output.size(); }
+		if (p_Dimension == 1) { return int(Output.size()); }
 		if (p_Dimension == 2) { return Output_Depth_2D; }
 		if (p_Dimension == 3) { return Output_Depth_3D; }
 	}
@@ -176,9 +176,9 @@ public:
 	//Gathers the treetops, used to be at the end of query but decoupled for complex searches.
 	virtual void gather_Treetops()=0;
 
-	virtual void backpropagate_NID_Into_Given_Index(uint64_t p_NID, int p_Index, double p_Charge) = 0;
+	virtual void backpropagate_NID_Into_Given_Index(uint64_t p_NID, int p_Index, float p_Charge) = 0;
 
-	void set_Input_Charging_Mask(std::vector<double> p_Input_Charging_Mask)
+	void set_Input_Charging_Mask(std::vector<float> p_Input_Charging_Mask)
 	{
 		Input_Charging_Mask = p_Input_Charging_Mask;
 	}
@@ -207,17 +207,17 @@ public:
 	}
 
 	//Hyperparams
-	void set_Base_Charge(double p_Base_Charge)
+	void set_Base_Charge(float p_Base_Charge)
 	{
 		tmp_Buffman.set_Base_Charge(p_Base_Charge);
 	}
 
-	void set_Modifier_Charge(double p_Modifier_Charge)
+	void set_Modifier_Charge(float p_Modifier_Charge)
 	{
 		tmp_Buffman.set_Modifier_Charge(p_Modifier_Charge);
 	}
 
-	void set_Action_Potential_Threshold(double p_Action_Potential_Threshold)
+	void set_Action_Potential_Threshold(float p_Action_Potential_Threshold)
 	{
 		tmp_Buffman.set_Action_Potential_Threshold(p_Action_Potential_Threshold);
 		//std::cout << "\n Setting Action_Potential_Threshold to " << p_Action_Potential_Threshold;
@@ -229,22 +229,22 @@ public:
 		Charging_Tier = p_Charging_Tier;
 	}
 
-	double get_Base_Charge()
+	float get_Base_Charge()
 	{
 		return tmp_Buffman.get_Base_Charge();
 	}
 
-	double get_Modifier_Charge()
+	float get_Modifier_Charge()
 	{
 		return tmp_Buffman.get_Modifier_Charge();
 	}
 
-	double get_Action_Potential_Threshold()
+	float get_Action_Potential_Threshold()
 	{
 		return tmp_Buffman.get_Action_Potential_Threshold();
 	}
 
-	double get_Charging_Tier()
+	int get_Charging_Tier()
 	{
 		return Charging_Tier;
 	}

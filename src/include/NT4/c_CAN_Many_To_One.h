@@ -177,7 +177,7 @@ public:
 		{
 			if (Scaffold[0][cou_Input] != NULL)
 			{
-				double tmp_Charge = tmp_Buffman.get_Base_Charge();
+				float tmp_Charge = tmp_Buffman.get_Base_Charge();
 
 				//Check for the charging mask.
 				if (Input_Charging_Mask.size() == Input.Depth)
@@ -220,8 +220,8 @@ public:
 	{
 		//tmp_Buffman.gather_Treetops();
 
-		double tmp_Charge = 0.0;
-		double tmp_H_Charge = tmp_Buffman.get_Treetops_Highest_Charge();
+		float tmp_Charge = 0.0;
+		float tmp_H_Charge = tmp_Buffman.get_Treetops_Highest_Charge();
 		if (tmp_H_Charge == 0) { tmp_H_Charge = 1.0; }
 
 		c_Charging_Linked_List* tmp_Current_LL = NULL;
@@ -259,7 +259,7 @@ public:
 				Output[tmp_Current_Index].set_Pattern_Index(tmp_LL_Pat->Quanta, cou_Index);
 				tmp_LL_Pat = tmp_LL_Pat->Next;
 			}
-
+			
 			tmp_Charge = (tmp_Current_LL->Charge / tmp_H_Charge) * get_Base_Charge();
 
 			//---std::cout << "\n ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 5";
@@ -277,7 +277,7 @@ public:
 		tmp_Buffman.reset_Treetops();
 	}
 
-	void backpropagate_NID_Into_Given_Index(uint64_t p_NID, int p_Index, double p_Charge)
+	void backpropagate_NID_Into_Given_Index(uint64_t p_NID, int p_Index, float p_Charge)
 	{
 		c_Linked_List_Handler tmp_Pattern;
 
@@ -502,10 +502,10 @@ public:
 		std::cout << "[";
 		for (int cou_Index = 0; cou_Index < State_Depth; cou_Index++)
 		{
-			std::cout << char(Scaffold[0][cou_Index]);
+			std::cout << static_cast<char>(uint64_t(Scaffold[0][cou_Index]) & 0xFF);
 		}
 		std::cout << "]";
-		std::cout << "\n[" << char(Scaffold[1][0]) << "]";
+		std::cout << "\n[" << static_cast<char>(uint64_t(Scaffold[1][0]) & 0xFF)  << "]";
 	}
 
 	void output_Scaffold_Tops()

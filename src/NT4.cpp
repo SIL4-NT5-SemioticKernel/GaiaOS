@@ -16,18 +16,6 @@ using namespace std;
 
 //Output.ssv - This file holds the output data, a table holding traces.
 
-//This isn't for the engine itself, but for the testing of it. To remove in release version.
-void generate_Test_Data()
-{
-    c_Sim Simboi;
-    for (int cou_Index = 0; cou_Index < 100; cou_Index++)
-    {
-        Simboi.iterate();
-        Simboi.output();
-        Simboi.output_F("Sim_Test_Data.txt");
-    }
-}
-
 int main(int argc, char** argv)
 {
     c_GaiaOS_Text_Server GaiaOS;

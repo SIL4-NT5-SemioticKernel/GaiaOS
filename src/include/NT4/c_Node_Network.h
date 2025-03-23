@@ -18,7 +18,7 @@ public:
 	uint64_t Node_Count;
 
 	//The current widest row in the network on last evaluation.
-	float Fat_Tier;
+	int Fat_Tier;
 
 	//This holds the state trees for each construct.
 	//Even if two constructs have the same state input you may want to keep them separate, so you need multiple state trees.
@@ -270,13 +270,13 @@ public:
 	}
 
 	//Gets the current fat row.
-	uint64_t get_Fat_Tier()
+	int get_Fat_Tier()
 	{
 		return Fat_Tier;
 	}
 
 	//Sets the fat row.
-	void set_Fat_Tier(uint64_t p_Fat_Tier)
+	void set_Fat_Tier(int p_Fat_Tier)
 	{
 		Fat_Tier = p_Fat_Tier;
 	}

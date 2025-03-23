@@ -252,9 +252,9 @@ public:
     }
 
     //Outputs the deviation mapping.
-    std::vector<float> get_Current_Deviation_Set()
+    std::vector<double> get_Current_Deviation_Set()
     {
-        std::vector<float> tmp_Return;
+        std::vector<double> tmp_Return;
         tmp_Return.resize(Afferent_Count);
 
         //---std::cout << "\n ---Afferent_Count: " << Afferent_Count;
@@ -266,9 +266,9 @@ public:
         return tmp_Return;
     }
 
-    std::vector<std::vector<float>> get_Deviation_Set()
+    std::vector<std::vector<double>> get_Deviation_Set()
     {
-        std::vector<std::vector<float>> tmp_Return;
+        std::vector<std::vector<double>> tmp_Return;
         tmp_Return.resize(Afferent_Count);
 
         for (int cou_A = 0; cou_A < Afferent_Count; cou_A++)
@@ -283,7 +283,7 @@ public:
         return tmp_Return;
     }
 
-    float get_Current_Afferent_Deviation(int p_Afferent)
+    double get_Current_Afferent_Deviation(int p_Afferent)
     {
         return Afferent[p_Afferent]->Deviation[Afferent[p_Afferent]->Depth - 1];
     }
@@ -460,7 +460,7 @@ public:
         tmp_Bulk = TSG.get_Bulk(1);
         //write_Bulk(p_FName);
 
-        std::vector<float> tmp_Deviation_Mapping;
+        std::vector<double> tmp_Deviation_Mapping;
         tmp_Deviation_Mapping = get_Current_Deviation_Set();
 
         // [-----]
@@ -512,22 +512,23 @@ public:
         float tmp_Normalized_Direction_Sum = 0;
         float tmp_Normalized_RC_Sum = 0;
         float tmp_Normalized_Charge_Sum = 0;
-
+		
+		
         std::vector<std::vector<float>> tmp_Output_Signals;
 
         bool flg_Bored = false;
 
         if (tmp_Bulk.size() > 0)
         {
-            tmp_Chrono_Depth = tmp_Bulk.size();
+            tmp_Chrono_Depth = int(tmp_Bulk.size());
 
             if (tmp_Chrono_Depth > 0)
             {
-                tmp_Raw_Depth = tmp_Bulk[0].size();
+                tmp_Raw_Depth = int(tmp_Bulk[0].size());
 
                 if (tmp_Raw_Depth > 0)
                 {
-                    tmp_Output_Depth = tmp_Bulk[0][0].size();
+                    tmp_Output_Depth = int(tmp_Bulk[0][0].size());
                 }
             }
         }
@@ -620,8 +621,8 @@ public:
                 //---std::cout << "  D: " << tmp_Bulk[0][tmp_AIndex][cou_O].Data.D;
                 //---std::cout << "  I: " << TSG.get_Input(0, 0, tmp_AIndex);
                 //---std::cout << "  ?= " << (tmp_Bulk[0][tmp_AIndex][cou_O].Data.D == TSG.get_Input(0, 0, tmp_AIndex));
-                float tmp_D = tmp_Bulk[0][tmp_AIndex][cou_O].Data.D;
-                float tmp_I = TSG.get_Input(0, 0, tmp_AIndex);
+                double tmp_D = tmp_Bulk[0][tmp_AIndex][cou_O].Data.D;
+                double tmp_I = TSG.get_Input(0, 0, tmp_AIndex);
                 //float tmp_I_L = (TSG.get_Input(0, 0, tmp_AIndex) - 1);
                 //float tmp_I_H = (TSG.get_Input(0, 0, tmp_AIndex) + 1);
                 //if ((tmp_D > tmp_I_L) && (tmp_D < tmp_I_H))
@@ -715,8 +716,8 @@ public:
         tmp_Normalized_Start_Anchor_Sum = 0;
         for (int cou_O = 0; cou_O < tmp_Output_Depth; cou_O++)
         {
-            if (tmp_Normalized_Start_Anchor_Sum < tmp_Validate_Start_Anchor_Sum[cou_O]) { tmp_Normalized_Start_Anchor_Sum = tmp_Validate_Start_Anchor_Sum[cou_O]; }
-            if (tmp_Normalized_Direction_Sum < tmp_Validate_Direction_Sum[cou_O]) { tmp_Normalized_Direction_Sum = tmp_Validate_Direction_Sum[cou_O]; }
+            if (tmp_Normalized_Direction_Sum < tmp_Validate_Direction_Sum[cou_O]) { tmp_Normalized_Direction_Sum = float(tmp_Validate_Direction_Sum[cou_O]); }
+            if (tmp_Normalized_Direction_Sum < tmp_Validate_Direction_Sum[cou_O]) { tmp_Normalized_Direction_Sum = float(tmp_Validate_Direction_Sum[cou_O]); }
             if (tmp_Normalized_RC_Sum < tmp_Validate_RC_Sum[cou_O]) { tmp_Normalized_RC_Sum = tmp_Validate_RC_Sum[cou_O]; }
             if (tmp_Normalized_Charge_Sum < tmp_Validate_Charge[cou_O]) { tmp_Normalized_Charge_Sum = tmp_Validate_Charge[cou_O]; }
         }
@@ -727,8 +728,8 @@ public:
             {
                 tmp_Validate_Start_Anchor_Sum[cou_O] = int((tmp_Validate_Start_Anchor_Sum[cou_O] / tmp_Normalized_Start_Anchor_Sum) * 100);
                 tmp_Validate_Direction_Sum[cou_O] = int((tmp_Validate_Direction_Sum[cou_O] / tmp_Normalized_Direction_Sum) * 100);
-                tmp_Validate_RC_Sum[cou_O] = int((tmp_Validate_RC_Sum[cou_O] / tmp_Normalized_RC_Sum) * 10);
-                tmp_Validate_Charge[cou_O] = int((tmp_Validate_Charge[cou_O] / tmp_Normalized_Charge_Sum) * 10);
+                tmp_Validate_RC_Sum[cou_O] = float(int((tmp_Validate_RC_Sum[cou_O] / tmp_Normalized_RC_Sum) * 10));
+                tmp_Validate_Charge[cou_O] = float(int((tmp_Validate_Charge[cou_O] / tmp_Normalized_Charge_Sum) * 10));
             }
         }
         else
@@ -1056,7 +1057,7 @@ public:
             flg_Bored = true;
         }
 
-        Previous_Node_Count = TSG.NT4_Core.Base.Nodes.Node_Count;
+        Previous_Node_Count = int(TSG.NT4_Core.Base.Nodes.Node_Count); 
 
         std::ofstream tmp_OTOF;
         tmp_FName = "./GaiaTesting/" + p_FName + ".Total_Output_Traces.ssv";
@@ -1079,7 +1080,7 @@ public:
 
         tmp_High_Fn -= tmp_Low_Fn;
 
-        if (tmp_High_Fn == 0) { tmp_High_Fn = tmp_Low_Fn; tmp_Low_Fn = 0; }
+        if (tmp_High_Fn == 0.0) { tmp_High_Fn = tmp_Low_Fn; tmp_Low_Fn = 0.0f; }
 
         for (int cou_E = 0; cou_E < IO.Efferent_Count; cou_E++)
         {
@@ -1098,7 +1099,7 @@ public:
 
         tmp_High_Fn *= p_Score_Threshold_Modifier;
 
-        if (tmp_High_Fn == 0) { tmp_High_Fn = 0.1; }
+        if (tmp_High_Fn == 0.0f) { tmp_High_Fn = 0.1f; }
 
         for (int cou_E = 0; cou_E < IO.Efferent_Count; cou_E++)
         {
@@ -1342,7 +1343,7 @@ public:
 
         //output_Deviation_Mapping();
 
-        std::vector<float> tmp_Deviation_Set;
+        std::vector<double> tmp_Deviation_Set;
 
         tmp_Deviation_Set = get_Current_Deviation_Set();
 
@@ -1505,18 +1506,18 @@ public:
         IO.output_Deviation_Mapping();
     }
 
-    std::vector<float> get_Current_Deviation_Set()
+    std::vector<double> get_Current_Deviation_Set()
     {
         return IO.get_Current_Deviation_Set();
     }
-    std::vector<std::vector<float>> get_Deviation_Set()
+    std::vector<std::vector<double>> get_Deviation_Set()
     {
         return IO.get_Deviation_Set();
     }
 
     void copy_Deviation(int p_RF)
     {
-        std::vector<float> tmp_Current_Deviation_Set = get_Current_Deviation_Set();
+        std::vector<double> tmp_Current_Deviation_Set = get_Current_Deviation_Set();
 
         //---std::cout << "\n copy_Deviation(" << p_RF << ")";
 
@@ -1545,7 +1546,7 @@ public:
 
     void copy_Deviation_Index(int p_RF, int p_Index)
     {
-        float tmp_Current_Deviation = IO.get_Current_Afferent_Deviation(p_Index);
+        double tmp_Current_Deviation = IO.get_Current_Afferent_Deviation(p_Index);
 
         //---std::cout << "\n copy_Deviation(" << p_RF << ")";
 
@@ -2363,7 +2364,7 @@ public:
             //tmp_F << "\n";
             tmp_F.close();
 
-            float tmp_Middle = (tmp_Start + tmp_End) / 2;
+            float tmp_Middle = float(tmp_Start + tmp_End) / 2;
 
             // Dynamically compute granulation based on p_Start, p_End, and p_Step
             for (int granulation_value = 0; granulation_value <= tmp_End; granulation_value += tmp_Step)
@@ -2449,7 +2450,7 @@ public:
 
         std::ifstream tmp_F;
 
-        double tmp_Input = 0.0;
+        float tmp_Input = 0.0;
 
         for (int cou_A = 0; cou_A < API.get_Afferent_Count(); cou_A++)
         {

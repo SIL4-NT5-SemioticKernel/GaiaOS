@@ -272,8 +272,8 @@ public:
 	void gather_Treetops()
 	{
 		//---std::cout << "\n\n Gathering Treetops...";
-		double tmp_Charge = 0.0;
-		double tmp_H_Charge = tmp_Buffman.get_Treetops_Highest_Charge();
+		float tmp_Charge = 0.0;
+		float tmp_H_Charge = tmp_Buffman.get_Treetops_Highest_Charge();
 		if (tmp_H_Charge == 0) { return; }
 
 		c_Charging_Linked_List* tmp_Current_LL = NULL;
@@ -337,7 +337,7 @@ public:
 		tmp_Buffman.reset_Treetops();
 	}
 
-	void backpropagate_NID_Into_Given_Index(uint64_t p_NID, int p_Index, double p_Charge)
+	void backpropagate_NID_Into_Given_Index(uint64_t p_NID, int p_Index, float p_Charge)
 	{
 		c_Linked_List_Handler tmp_Pattern;
 
@@ -574,7 +574,7 @@ public:
 			std::cout << "\nT<" << cou_T << "> [";
 			for (int cou_Index = 0; cou_Index < (State_Depth - cou_T); cou_Index++)
 			{
-				std::cout << char(Scaffold[cou_T][cou_Index]);
+				std::cout << static_cast<char>(uint64_t(Scaffold[cou_T][cou_Index]) & 0xFF);
 			}
 			std::cout << "]";
 		}
@@ -602,7 +602,7 @@ public:
 			std::cout << "\nT<" << cou_T << "> [";
 			for (int cou_Index = 0; cou_Index < (State_Depth - cou_T); cou_Index++)
 			{
-				std::cout << char(Scaffold[cou_T][cou_Index]);
+				std::cout << static_cast<char>(uint64_t(Scaffold[cou_T][cou_Index]) & 0xFF);
 
 				if (tmp_NID[0][cou_Index] == 0)
 				{

@@ -472,7 +472,7 @@ public:
 
         *p_File >> tmp_Construct;
 
-        double tmp_Base_Charge = 0.0;
+        float tmp_Base_Charge = 0.0;
 
         *p_File >> tmp_Base_Charge;
 
@@ -487,7 +487,7 @@ public:
 
         *p_File >> tmp_Construct;
 
-        double tmp_Modifier_Charge = 0.0;
+        float tmp_Modifier_Charge = 0.0;
 
         *p_File >> tmp_Modifier_Charge;
 
@@ -502,7 +502,7 @@ public:
 
         *p_File >> tmp_Construct;
 
-        double tmp_Action_Potential_Threshold = 0.0;
+        float tmp_Action_Potential_Threshold = 0.0;
 
         *p_File >> tmp_Action_Potential_Threshold;
 

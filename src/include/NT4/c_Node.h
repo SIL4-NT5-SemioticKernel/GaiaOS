@@ -880,6 +880,6 @@ public:
 
     void output_Node_Char()
     {
-        std::cout << char(this);
+        std::cout << static_cast<char>(uint64_t(this) & 0xFF);
     }
 };

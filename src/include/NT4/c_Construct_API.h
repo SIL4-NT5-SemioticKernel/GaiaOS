@@ -40,17 +40,17 @@ public:
 	}
 
 	//Hyperparams
-	void set_Base_Charge(std::string p_Construct, double p_Base_Charge)
+	void set_Base_Charge(std::string p_Construct, float p_Base_Charge)
 	{
 		Base.set_Base_Charge(get_Construct_ID(p_Construct), p_Base_Charge);
 	}
 
-	void set_Modifier_Charge(std::string p_Construct, double p_Modifier_Charge)
+	void set_Modifier_Charge(std::string p_Construct, float p_Modifier_Charge)
 	{
 		Base.set_Modifier_Charge(get_Construct_ID(p_Construct), p_Modifier_Charge);
 	}
 
-	void set_Action_Potential_Threshold(std::string p_Construct, double p_Action_Potential_Threshold)
+	void set_Action_Potential_Threshold(std::string p_Construct, float p_Action_Potential_Threshold)
 	{
 		Base.set_Action_Potential_Threshold(get_Construct_ID(p_Construct), p_Action_Potential_Threshold);
 	}
@@ -60,17 +60,17 @@ public:
 		Base.set_Charging_Tier(get_Construct_ID(p_Construct), p_Charging_Tier);
 	}
 
-	double get_Base_Charge(std::string p_Construct)
+	float get_Base_Charge(std::string p_Construct)
 	{
 		return Base.get_Base_Charge(get_Construct_ID(p_Construct));
 	}
 
-	double get_Modifier_Charge(std::string p_Construct)
+	float get_Modifier_Charge(std::string p_Construct)
 	{
 		return Base.get_Modifier_Charge(get_Construct_ID(p_Construct));
 	}
 
-	double get_Action_Potential_Threshold(std::string p_Construct)
+	float get_Action_Potential_Threshold(std::string p_Construct)
 	{
 		return Base.get_Action_Potential_Threshold(get_Construct_ID(p_Construct));
 	}
@@ -762,7 +762,7 @@ public:
 	}
 
 
-	void set_Input_Charging_Mask(std::string p_Construct, std::vector<double> p_Input_Charging_Mask)
+	void set_Input_Charging_Mask(std::string p_Construct, std::vector<float> p_Input_Charging_Mask)
 	{
 		Base.set_Input_Charging_Mask(get_Construct_ID(p_Construct), p_Input_Charging_Mask);
 	}
