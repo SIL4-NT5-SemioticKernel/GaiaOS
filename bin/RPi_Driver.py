@@ -24,12 +24,17 @@ def parse_config(path):
             fpath = Path(parts[-1])
 
             if mode == "A":
-                afferents.append({'pins': pins, 'path': fpath})
+                afferents.append({'type': 'gpio', 'pins': pins, 'path': fpath})
             elif mode == "E":
                 if len(pins) != 1:
                     print(f"[WARN] Efferent must have 1 pin: {line}")
                     continue
                 efferents.append({'pin': pins[0], 'path': fpath})
+            elif mode == "A1W":
+                # Example line: A1W 28-000005e2fdc3 temp_sensor_1.txt
+                sensor_id = parts[1]
+                fpath = Path(parts[2])
+                afferents.append({'type': '1wire', 'sensor': sensor_id, 'path': fpath})
 
 def setup_gpio():
     GPIO.setmode(GPIO.BCM)
@@ -57,12 +62,26 @@ def bridge_once():
         except:
             pass
 
-    # Afferents: GPIO → file
+    
     for aff in afferents:
-        val = read_gpio_to_bus(aff['pins'])
         try:
+            # Afferents: GPIO → file, 1-Wire → file
+            if aff['type'] == 'gpio':
+                val = read_gpio_to_bus(aff['pins'])
+            elif aff['type'] == '1wire':
+                sensor_path = f"/sys/bus/w1/devices/{aff['sensor']}/w1_slave"
+                with open(sensor_path, "r") as f:
+                    lines = f.readlines()
+                    if lines[0].strip().endswith("YES"):
+                        temp_str = lines[1].split("t=")[-1].strip()
+                        val = float(temp_str) / 1000.0
+                    else:
+                        continue  # bad CRC, skip
+            else:
+                continue  # unknown type
+
             with open(aff['path'], "w") as f:
-                f.write(str(val) + "\n")
+                f.write(f"{val}\n")
         except:
             pass
 
