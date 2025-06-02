@@ -7,6 +7,7 @@ import signal
 import sys
 import os
 import tempfile
+import smbus2
 
 # ——————————————————————————————————————————————————————————————————————————————
 # Configuration Constants
@@ -291,33 +292,86 @@ def read_ultrasonic(trig_pin, echo_pin):
 # read_ph: use ADS1115 to read channel and convert voltage → pH
 # ——————————————————————————————————————————————————————————————————————————————
 # We’ll initialize ADS instances later, keyed by I²C address.
-ads_devices = {}
+ads_buses = {}
 
-def read_ph(aff):
-    """
-    aff has fields: 'addr', 'chan', 'slope', 'offset'.
-    Return a floating-point pH value or None on timeout/error.
-    """
-    from board import SCL, SDA
-    import busio
-    from adafruit_ads1x15.ads1115 import ADS1115
-    from adafruit_ads1x15.analog_in import AnalogIn
+# ADS1115 register and config constants
+ADS_CONV_REG    = 0x00
+ADS_CONFIG_REG  = 0x01
+ADS_ADDR_POINTER= 0x48   # if ADDR pin is tied to GND
 
+# PGA and data rate settings for single-ended reads on A0…A3
+# For simplicity, we'll use ±4.096V range (bits 11:9 = 001) and 128SPS (bits 7:5 = 100).
+# That gives 16-bit readings where 1 LSB ≈125µV → fine for a 0–3.3V pH sensor.
+CONFIG_OS_SINGLE    = 0x8000
+CONFIG_MUX_OFFSET   = 12      # MUX bits start at bit 12
+CONFIG_PGA_4_096V   = 0x0200  # bits [11:9] = 001
+CONFIG_MODE_SINGLE  = 0x0100  # single-shot mode
+CONFIG_DR_128SPS    = 0x0080  # bits [7:5] = 100
+CONFIG_COMP_QUE_N    = 0x0003 # disable comparator (bits [1:0])
+def read_ph_smbus(aff):
+    """
+    Read ADS1115 channel using smbus2, then convert raw to voltage→pH.
+    'aff' has fields: 'addr', 'chan', 'slope', 'offset'.
+    Returns float pH or None on error.
+    """
     addr = aff["addr"]
-    if addr not in ads_devices:
-        i2c = busio.I2C(SCL, SDA)
-        ads_devices[addr] = ADS1115(i2c, address=addr)
-        # LOG: ADS1115 initialized
-        logger.info(f"Initialized ADS1115 at I²C address 0x{addr:02X}")
+    chan = aff["chan"]  # 0..3
 
-    ads = ads_devices[addr]
-    chan_name = f"P{aff['chan']}"    # e.g. "P0" or "P1"
-    chan = AnalogIn(ads, getattr(ADS1115, chan_name))
+    # Open /dev/i2c-1 if not already open
+    if addr not in ads_buses:
+        try:
+            bus = smbus2.SMBus(1)  # I2C bus 1 on Pi
+            ads_buses[addr] = bus
+        except FileNotFoundError:
+            logger.error(f"I2C bus /dev/i2c-1 not found. Is I²C enabled?")
+            return None
 
-    voltage = chan.voltage
+    bus = ads_buses[addr]
+
+    # Build config word for single-shot read on channel 'chan'
+    # MUX channels: A0=100, A1=101, A2=110, A3=111 (bit patterns for MUX[2:0])
+    mux = 0x04 + chan  # A0→4, A1→5, A2→6, A3→7
+    config = (
+        CONFIG_OS_SINGLE |
+        (mux << CONFIG_MUX_OFFSET) |
+        CONFIG_PGA_4_096V |
+        CONFIG_MODE_SINGLE |
+        CONFIG_DR_128SPS |
+        CONFIG_COMP_QUE_N
+    )
+
+    # Write config to ADS_CONFIG_REG
+    try:
+        # First, write two bytes of config
+        msb = (config >> 8) & 0xFF
+        lsb = config & 0xFF
+        bus.write_i2c_block_data(addr, ADS_CONFIG_REG, [msb, lsb])
+    except OSError as e:
+        logger.error(f"I2C write to ADS1115@0x{addr:02X} failed: {e}")
+        return None
+
+    # Poll until conversion-ready (OS bit=0 → 1 means done). Simple delay is ok at 128SPS:
+    time.sleep(1.0/128 + 0.005)
+
+    # Read two‐byte conversion result
+    try:
+        data = bus.read_i2c_block_data(addr, ADS_CONV_REG, 2)
+    except OSError as e:
+        logger.error(f"I2C read from ADS1115@0x{addr:02X} failed: {e}")
+        return None
+
+    raw = (data[0] << 8) | data[1]
+    # Sign‐extend if negative
+    if raw & 0x8000:
+        raw -= 1 << 16
+
+    # LSB size at ±4.096V is 125 µV (4.096V/32768)
+    voltage = raw * 0.000125  # in volts
+
+    # Convert to pH via calibration
     pH_val = aff["slope"] * voltage + aff["offset"]
-    # LOG: Report raw voltage and computed pH
-    logger.info(f"pH read (ADS@0x{addr:02X} CH{aff['chan']}): V={voltage:.3f} → pH={pH_val:.2f}")
+    # LOG: Report raw, voltage, and pH
+    logger.info(f"pH (I2C@0x{addr:02X} CH{chan}): raw={raw}, V={voltage:.3f} → pH={pH_val:.2f}")
     return pH_val
 
 # ——————————————————————————————————————————————————————————————————————————————
@@ -366,9 +420,8 @@ def bridge_once():
                 val = read_ultrasonic(aff["trig"], aff["echo"])
                 if val is None:
                     continue
-
             elif aff["type"] == "ph":
-                val = read_ph(aff)
+                val = read_ph_smbus(aff)
                 if val is None:
                     continue
 
