@@ -111,9 +111,9 @@ public:
 		Constructs[Construct_Count]->Name = p_Construct_Name;
 
 		//The reason the .Input and .Output are appended even though they are in folders named input and output this allows you to copy them into the same dir if you feel like it.
-		Constructs[Construct_Count]->Input_File = "Input\\" + p_Construct_Name + ".Input.ssv";
-		Constructs[Construct_Count]->Config_File = "Config\\" + p_Construct_Name + ".Config.ssv";
-		Constructs[Construct_Count]->Output_File = "Output\\" + p_Construct_Name + ".Output.ssv";
+		Constructs[Construct_Count]->Input_File = "./Input/" + p_Construct_Name + ".Input.ssv";
+		Constructs[Construct_Count]->Config_File = "./Config/" + p_Construct_Name + ".Config.ssv";
+		Constructs[Construct_Count]->Output_File = "./Output/" + p_Construct_Name + ".Output.ssv";
 
 		std::ofstream tmp_IF(Constructs[Construct_Count]->Input_File, std::ios::app);
 		tmp_IF.close();
