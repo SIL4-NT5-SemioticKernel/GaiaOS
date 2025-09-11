@@ -1,0 +1,106 @@
+
+
+//==-- STEP 1 --==//
+//Run on the command line to install dependencies
+
+sudo apt-get update
+sudo apt-get install -y python3 python3-pip python3-venv \
+                        python3-rpi.gpio python3-smbus2 \
+                        build-essential cmake i2c-tools
+
+//This will output the version if installed correctly:
+python3 --version
+pip3 --version
+cmake --version
+
+
+//==-- STEP 2 --==//
+//Enable 1-Wire and I2C if needed
+
+//Open it to edit with:
+sudo nano /boot/firmware/config.txt
+
+//Then at the end of the file add
+# Enable I2C bus
+dtparam=i2c_arm=on
+
+# Enable 1-Wire bus on GPIO4 (default pin)
+dtoverlay=w1-gpio
+
+// Or if you wired the 1-Wire to a different GPIO than the default number 4 pin:
+dtoverlay=w1-gpio,gpiopin=17,pullup=on
+
+//Save then:
+sudo reboot
+
+//=- I2C
+//Purpose: Two-wire serial bus for chips like ADCs (ADS1115), DACs, RTCs, IO expanders.
+//Pins:
+//GPIO2 = SDA1 (header pin 3)
+//GPIO3 = SCL1 (header pin 5)
+
+//Verify the I2C is active:
+//Find i2c devices
+ls /dev/i2c-*
+
+//Scan for i2c devices
+//Should show 48 for an ADS1115 at address 0x48.
+sudo apt-get install -y i2c-tools
+sudo i2cdetect -y 1
+
+//=- 1-Wire
+//Purpose: Single-wire digital bus (famously DS18B20 temp probes).
+//Pins:
+//Default GPIO4 (header pin 7).
+//Verify the 1-Wire is active:
+ls /sys/bus/w1/devices/
+
+//You should see something similar to the following, the 28-* is your ID to use when registering afferent input:
+28-xxxxxxxxxxxx  w1_bus_master1
+
+
+
+
+
+
+
+
+//==-- STEP 3 --==//
+//Setting up pinout.cfg
+
+// A   <pin> <pin> ...           IO_Files/A/<name>.ssv      # GPIO bus → int
+// E   <pin>                     IO_Files/E/<name>.ssv      # GPIO output ← 0/1
+// A1W <28-id>                   IO_Files/A/<name>.ssv      # DS18B20 → °C
+// US  <trig_pin> <echo_pin>     IO_Files/A/<name>.ssv      # HC-SR04 → cm
+// PH  <i2c_addr_hex> <chan>     IO_Files/A/<name>.ssv      # ADS1115 ch→ pH
+
+Examples:
+
+// Inputs
+A1W 28-0123456789ab           IO_Files/A/0.a.ssv
+A1W 28-0123456789bc           IO_Files/A/1.a.ssv
+
+// Outputs (relays)
+E   5                          IO_Files/E/0.e.ssv
+E   6                          IO_Files/E/1.e.ssv
+
+
+
+//==-- STEP 4 --==//
+
+//Navigate to the root of Gaia above bin and src
+
+//In the /bin/ subdire run:
+mkdir -p IO_Files/A IO_Files/E GaiaTesting Scripts
+printf "0\n" > IO_Files/E/0.e.ssv
+printf "0\n" > IO_Files/E/1.e.ssv
+
+//Run in the other terminal. Start with builderman.sh to compile the .exe, then run it.
+chmod +x builderman.sh
+builderman.sh
+chmod +x NT4
+./NT4
+
+
+//Run the bridge in one terminal(needs root for GPIO):
+sudo -E python3 RPi_Driver.py

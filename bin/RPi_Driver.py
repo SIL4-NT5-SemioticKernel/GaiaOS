@@ -453,7 +453,7 @@ def bridge_loop():
                 if flag != "1":
                     logger.debug("Control_Panel_Flag not 1 → running bridge_once()")
                     bridge_once()
-                    write_atomic(CONTROL_PANEL_FILE,       "eval Testermon.txt 0.0\n")
+                    #write_atomic(CONTROL_PANEL_FILE,       "eval Testermon.txt 0.0\n")
                     write_atomic(CONTROL_PANEL_FLAG_FILE,  "1\n")
                     # LOG: Notified control panel
                     logger.info("Wrote Control_Panel.ssv and set Control_Panel_Flag.ssv to 1")

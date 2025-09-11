@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\GitRepos\GaiaOS.Exploratory_Build\GaiaOS\src\build\CMakeFiles\a03f03b1d441bd7868e6b39061965f17\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{C7E1E4DA-A383-3795-958F-A5BEB28D4850}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
