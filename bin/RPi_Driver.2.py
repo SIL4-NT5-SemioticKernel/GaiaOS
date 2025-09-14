@@ -9,8 +9,12 @@ import signal
 import sys
 import os
 import tempfile
-import smbus2
 
+try:
+    import smbus2
+except ImportError:
+    smbus2 = None
+    
 # ─────────────────────────────────────────────────────────────────────────────────────
 # GPIO shim (Pi 5): replicate minimal RPi.GPIO API using lgpio
 # ─────────────────────────────────────────────────────────────────────────────────────
@@ -36,6 +40,43 @@ class _GPIOShim:
         self._claimed = set()  # track claimed line numbers (BCM)
         self._output_state = {}  # remember last set output if needed
 
+    def _open_bcm_chip(self):
+        """
+        Open the gpiochip that backs the 40-pin header.
+        On Pi 5 this is the RP1 GPIO block (label often contains 'rp1' or 'pinctrl').
+        Fall back to the first chip with a plausible label; last resort chip0.
+        """
+        bases = (Path("/sys/bus/gpio/devices"), Path("/sys/class/gpio"))
+        cand_list = []
+        for b in bases:
+            cand_list.extend(b.glob("gpiochip*"))
+        candidates = sorted(cand_list, key=lambda p: int(p.name.replace("gpiochip","")))
+
+        # Prefer RP1 / pinctrl labels first, then bcm, else first chip.
+        prefer = []
+        for dev in candidates:
+            label_file = dev / "label"
+            try:
+                label = label_file.read_text().strip().lower()
+            except Exception:
+                label = ""
+            chipn = int(dev.name.replace("gpiochip",""))
+            # Score by label
+            score = (
+                (3 if "rp1" in label else 0) +
+                (2 if "pinctrl" in label else 0) +
+                (1 if "bcm" in label else 0)
+            )
+            prefer.append((score, chipn))
+        prefer.sort(reverse=True)  # highest score first
+        for _score, chipn in prefer:
+            try:
+                return lgpio.gpiochip_open(chipn)
+            except Exception:
+                continue
+        # Absolute fallback
+        return lgpio.gpiochip_open(0)
+    
     # Compatibility: no-op but validate mode
     def setmode(self, mode):
         if mode not in (self.BCM, self.BOARD):
@@ -44,12 +85,24 @@ class _GPIOShim:
             raise NotImplementedError("BOARD numbering not supported by this shim; use BCM.")
         self._mode = mode
         if self._chip_handle is None:
-            # On Pi 5, the main GPIO controller is exposed as gpiochip0
-            self._chip_handle = lgpio.gpiochip_open(0)
+            try:
+                self._chip_handle = self._open_bcm_chip()
+            except Exception as e:
+                raise SystemExit(f"Failed to open a usable gpiochip: {e}")
 
     def _require_chip(self):
         if self._chip_handle is None:
             self.setmode(self.BCM)
+
+    def _claim_input(self, line: int, flags: int = 0):
+        # lgpio API: gpio_claim_input(handle, flags, line)
+        return lgpio.gpio_claim_input(self._chip_handle, flags, line)
+
+    def _claim_output(self, line: int, default: int, flags: int = 0):
+        # lgpio API: gpio_claim_output(handle, flags, line, default)
+        return lgpio.gpio_claim_output(self._chip_handle, flags, line, default)
+
+
 
     def setup(self, pin, direction):
         """
@@ -60,12 +113,11 @@ class _GPIOShim:
         if pin in self._claimed:
             lgpio.gpio_free(self._chip_handle, pin)
             self._claimed.discard(pin)
-
+            
         if direction == self.IN:
-            lgpio.gpio_claim_input(self._chip_handle, pin)
+            self._claim_input(pin)
         elif direction == self.OUT:
-            # default LOW on claim
-            lgpio.gpio_claim_output(self._chip_handle, pin, self.LOW)
+            self._claim_output(pin, self.LOW)
             self._output_state[pin] = self.LOW
         else:
             raise ValueError("Invalid direction (use GPIO.IN or GPIO.OUT)")
@@ -81,15 +133,15 @@ class _GPIOShim:
         v = self.HIGH if value else self.LOW
         # Claim as output on-the-fly if not already
         if pin not in self._claimed:
-            lgpio.gpio_claim_output(self._chip_handle, pin, v)
+            self._claim_output(pin, v)
             self._claimed.add(pin)
         else:
             # Ensure it's configured as output; if not, re-claim as output
             try:
                 lgpio.gpio_write(self._chip_handle, pin, v)
-            except lgpio.error:  # likely not configured as output
+            except Exception:
                 lgpio.gpio_free(self._chip_handle, pin)
-                lgpio.gpio_claim_output(self._chip_handle, pin, v)
+                self._claim_output(pin, v)
         self._output_state[pin] = v
 
     def cleanup(self):
@@ -147,7 +199,8 @@ efferents = []
 # Utility: write text to a file atomically
 # ——————————————————————————————————————————————————————————————————————————————
 def write_atomic(path: Path, data: str):
-    dirpath = path.parent or Path(".")
+    dirpath = path.parent if str(path.parent) != "" else Path(".")
+    dirpath.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", dir=str(dirpath), delete=False) as tf:
         tf.write(data)
         tf.flush()
@@ -368,6 +421,9 @@ CONFIG_DR_128SPS    = 0x0080
 CONFIG_COMP_QUE_N   = 0x0003
 
 def read_ph_smbus(aff):
+    if smbus2 is None:
+        logger.error("python3-smbus2 is required for pH/ADS1115. Install with: sudo apt install python3-smbus2")
+        return None
     addr = aff["addr"]
     chan = aff["chan"]  # 0..3
 
@@ -477,7 +533,6 @@ def bridge_once():
 # ——————————————————————————————————————————————————————————————————————————————
 # Main loop
 # ——————————————————————————————————————————————————————————————————————————————
-CONTROL_PANEL_FLAG_FILE = Path("Control_Panel_Flag.ssv")
 
 def bridge_loop():
     last_check = time.time()
@@ -496,7 +551,8 @@ def bridge_loop():
                     bridge_once()
                     #write_atomic(CONTROL_PANEL_FILE,       "eval Testermon.txt 0.0\n")
                     write_atomic(CONTROL_PANEL_FLAG_FILE,  "1\n")
-                    logger.info("Wrote Control_Panel.ssv and set Control_Panel_Flag.ssv to 1")
+                    #logger.info("Wrote Control_Panel.ssv and set Control_Panel_Flag.ssv to 1")
+                    logger.info("Set Control_Panel_Flag.ssv to 1")
             except Exception:
                 logger.exception("Control panel bridge error")
         time.sleep(POLL_INTERVAL)
