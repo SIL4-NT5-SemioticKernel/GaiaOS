@@ -117,7 +117,17 @@ public:
 
         return (Efferent_Count - 1);
     }
-
+	
+	void set_Afferent_Goal(int p_Index, double p_Goal)
+	{
+		Afferent[p_Index]->set_Goal(p_Goal);
+	}
+	
+	void wipe_Afferent_Bands(int p_Index)
+	{
+		Afferent[p_Index]->wipe_Bands();
+	}
+	
     //Accepts an input and updates the correct index with it
     void add_Afferent_Granulation(double p_Bottom, double p_Top, int p_Index = -1) //p_Index comes after since it may be 0
     {
@@ -1376,7 +1386,17 @@ public:
         //TSG.output_Bulk(1);
 
     }
-
+	
+	void set_Afferent_Goal(int p_Index, double p_Goal)
+	{
+		IO.set_Afferent_Goal(p_Index, p_Goal);
+	}
+	
+	void wipe_Afferent_Bands(int p_Index)
+	{
+		IO.wipe_Afferent_Bands(p_Index);
+	}
+	
     int register_Afferent()
     {
         int tmp_Return = IO.register_Afferent();
@@ -1504,7 +1524,7 @@ public:
     void output_Deviation_Mapping()
     {
         IO.output_Deviation_Mapping();
-    }
+	}
 
     std::vector<double> get_Current_Deviation_Set()
     {
@@ -1683,6 +1703,9 @@ class c_GaiaOS_Text_Server
 
     //Exit flag to allow for exit after startup if the user puts 'exit' into the autoexec file, needed for CLI capabilities.
     bool flg_Exit;
+	
+	//Whether to load the live update script, can be turned off for poking the machine
+	bool flg_Run_Update;
 
 private:
 
@@ -1909,6 +1932,7 @@ public:
     {
         Tick = 0;
         flg_Exit = false;
+		flg_Run_Update = false;
 
         std::cout << "\n\n   (~.~) BOOTING UP  ";
         //See if they submitted a command, these scripts are retrieved from the ./Scripts/ dir.
@@ -2305,14 +2329,16 @@ public:
                 std::cout << tmp_Message;
 
             }
-
-            // Execute the system update script
-            tmp_Result = interpret_File("./Scripts/update.txt");
-            if (tmp_Result == 0)
-            {
-                std::cerr << "\n\n   Error: Failed to execute system update script!\n\n";
-            }
-
+			
+			//If the flag is set to run then execute the system update script
+			if (flg_Run_Update)
+			{
+				tmp_Result = interpret_File("./Scripts/update.txt");
+				if (tmp_Result == 0)
+				{
+					std::cerr << "\n\n   Error: Failed to execute system update script!\n\n";
+				}
+			}
             Tick++;
         }
     }
@@ -2390,6 +2416,61 @@ public:
         // Initialize the system with the given chrono depth
         API.init(tmp_Chrono_Depth);
     }
+	
+	
+	void set_Afferent_Bands(std::ifstream* p_File)
+	{
+		std::cout << "\n --> set_Afferent_Bands |";
+
+		int tmp_A_Index = 0;
+		int tmp_Start   = 0;
+		int tmp_End     = 0;
+		int tmp_Step    = 0;
+
+		// Read: Afferent index, goal/center, end range, step
+		*p_File >> tmp_A_Index >> tmp_Start >> tmp_End >> tmp_Step;
+
+		std::cout << " A_Index: " << tmp_A_Index
+				  << " Start: "  << tmp_Start
+				  << " End: "    << tmp_End
+				  << " Step: "   << tmp_Step;
+
+		// Ensure step is not zero to avoid infinite loop
+		if (tmp_Step == 0)
+		{
+			std::cerr << "\nError: Step size (tmp_Step) cannot be zero.";
+			return;
+		}
+
+		// Optional: sanity check on afferent index if API exposes depth
+		// int tmp_A_Depth = API.get_Afferent_Depth();
+		// if (tmp_A_Index < 0 || tmp_A_Index >= tmp_A_Depth)
+		// {
+		//     std::cerr << "\nError: Afferent index out of range: " << tmp_A_Index;
+		//     return;
+		// }
+
+		// Set the concrete goal for this afferent (center of the onion)
+		// Requires you to implement API.set_Afferent_Goal(...)
+		API.set_Afferent_Goal(tmp_A_Index, tmp_Start);
+
+		// Wipe existing bands for this afferent so we can rebuild the onion
+		// Requires you to implement API.wipe_Afferent_Bands(...)
+		API.wipe_Afferent_Bands(tmp_A_Index);
+
+		// Dynamically compute granulation based on tmp_Start, tmp_End, and tmp_Step
+		for (int granulation_value = 0; granulation_value <= tmp_End; granulation_value += tmp_Step)
+		{
+			int tmp_Low  = tmp_Start - granulation_value;
+			int tmp_High = tmp_Start + granulation_value;
+
+			API.add_Afferent_Granulation(tmp_Low, tmp_High, tmp_A_Index);
+
+			std::cout << "\n add_Afferent_Granulation: A[" << tmp_A_Index
+					  << "] Low: " << tmp_Low
+					  << " High: " << tmp_High;
+		}
+	}
 
 
 
@@ -2420,6 +2501,7 @@ public:
 
         API.set_Afferent_Value(tmp_Index, tmp_Value);
     }
+	
 
     void set_Efferent_Value(std::ifstream* p_File, bool p_Echo = true)
     {
@@ -2773,6 +2855,8 @@ private:
         if (p_Command == "exit") { return -1; }
         if (p_Command == "/?") { help_Text(); return 1; }
         if (p_Command == "help") { help_Text(); return 1; }
+        if (p_Command == "start_engine") { flg_Run_Update = true; return 1; }
+        if (p_Command == "stop_engine") { flg_Run_Update = false; return 1; }
 
         //Data Loading and Preparation:
         //if (p_Command == "reset_Input") { reset_Input(p_File); return 1; }
@@ -2796,6 +2880,7 @@ private:
         //Commands for the homeostasis module.
         if (p_Command == "@shift_Data") { shift_Data(p_File, false); return 1; }
         if (p_Command == "shift_Data") { shift_Data(p_File); return 1; }
+        if (p_Command == "set_Afferent_Bands") { set_Afferent_Bands(p_File); return 1; }
         if (p_Command == "set_Afferent_Value") { set_Afferent_Value(p_File); return 1; }
         if (p_Command == "set_Efferent_Value") { set_Efferent_Value(p_File); return 1; }
         if (p_Command == "@set_Afferent_Value") { set_Afferent_Value(p_File, false); return 1; }

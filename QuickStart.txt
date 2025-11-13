@@ -104,3 +104,13 @@ chmod +x NT4
 
 //Run the bridge in one terminal(needs root for GPIO):
 sudo -E python3 RPi_Driver.py
+
+
+
+
+
+
+
+
+
+

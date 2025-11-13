@@ -46,12 +46,15 @@ public:
     //Granulated Data & Deltas are stored here at the same depth as the Data.
     c_Data* Granulated;
     c_Data* Delta;
-
+	
     //The deviation state.
     std::vector<double> Deviation;
 
     //The current deviation from the goal concrete, and the deviation granulated.
     double Goal_Deviation;
+	
+	//The concrete goal.
+	double Goal;
 
     //The depth of the data.
     int Depth;
@@ -65,6 +68,7 @@ public:
         Depth = 0;
 
         Goal_Deviation = 0;
+		Goal = 0;
     }
 
     void set_Depth(int p_Depth)
@@ -92,7 +96,21 @@ public:
 
         wipe_Data();
     }
-
+	
+	void set_Goal(double p_Goal)
+	{
+		Goal = p_Goal;
+	}
+	
+	double get_Goal()
+	{
+		return Goal;
+	}
+	
+	void wipe_Bands()
+	{
+		Granulator.wipe_Bands();
+	}
 
     //This shifts the output from current to 0.
     void wipe_Data()

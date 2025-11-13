@@ -70,6 +70,17 @@ public:
 		Count++;
 	}
 
+	void wipe_Bands()
+	{
+		if (Top != NULL)
+		{
+			delete[] Top; Top = NULL;
+			delete[] Bottom; Bottom = NULL;
+			delete[] Mid; Mid = NULL;
+		}
+		Count = 0;
+	}
+	
 	double get_Value(int p_Var, double p_Value)
 	{
 		//Range goals
@@ -103,5 +114,10 @@ public:
 
 		//If you find this value then it means the input is out of bounds.
 		return -0.123456;
+	}
+	
+	void reset_Granulations()
+	{
+		
 	}
 };

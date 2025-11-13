@@ -1,5 +1,3 @@
-Got it — you want a full **GitHub-ready README.md** style manual that incorporates everything we’ve covered: intro, commands, examples, non-obvious quirks, and workflow. I’ll keep Markdown formatting clean (no characters that break rendering, e.g. I’ll use fenced code blocks carefully and avoid stray pipes). This can live directly as `README.md` in your repo.
-
 ---
 
 # Gaia Shell Manual
