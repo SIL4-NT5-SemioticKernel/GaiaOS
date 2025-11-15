@@ -727,7 +727,8 @@ public:
         for (int cou_O = 0; cou_O < tmp_Output_Depth; cou_O++)
         {
             if (tmp_Normalized_Direction_Sum < tmp_Validate_Direction_Sum[cou_O]) { tmp_Normalized_Direction_Sum = float(tmp_Validate_Direction_Sum[cou_O]); }
-            if (tmp_Normalized_Direction_Sum < tmp_Validate_Direction_Sum[cou_O]) { tmp_Normalized_Direction_Sum = float(tmp_Validate_Direction_Sum[cou_O]); }
+			if (tmp_Normalized_Start_Anchor_Sum < tmp_Validate_Start_Anchor_Sum[cou_O]){ tmp_Normalized_Start_Anchor_Sum = float(tmp_Validate_Start_Anchor_Sum[cou_O]); }
+
             if (tmp_Normalized_RC_Sum < tmp_Validate_RC_Sum[cou_O]) { tmp_Normalized_RC_Sum = tmp_Validate_RC_Sum[cou_O]; }
             if (tmp_Normalized_Charge_Sum < tmp_Validate_Charge[cou_O]) { tmp_Normalized_Charge_Sum = tmp_Validate_Charge[cou_O]; }
         }
