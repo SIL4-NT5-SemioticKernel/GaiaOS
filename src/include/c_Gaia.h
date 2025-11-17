@@ -2295,10 +2295,13 @@ public:
                 if (tmp_Distance >= tmp_MAX) { flg_Direction = -1; }
                 if (tmp_Distance <= (tmp_MAX * -1)) { flg_Direction = 1; }
 
+				/*
                 for (int cou_Index = 0; cou_Index < (tmp_Message.length() + 9); cou_Index++)
                 {
                     std::cout << char(8);
                 }
+				*/
+				std::cout << "\r";
 
                 tmp_Corrupt_Message = tmp_Message;
 

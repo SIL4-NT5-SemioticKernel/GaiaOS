@@ -654,7 +654,7 @@ public:
 		std::cout << "\n\n";
 		for (int cou_Index = 0; cou_Index < State_Depth; cou_Index++)
 		{
-			if (tmp_NID[1][cou_Index] != NULL)
+			if (tmp_NID[1][cou_Index] != 0)
 			{
 				Scaffold[tmp_Tier[cou_Index]][tmp_Index[cou_Index]]->bp_O(0);
 			}

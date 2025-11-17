@@ -340,7 +340,7 @@ public:
 		if (tmp_Legs != NULL) { delete[] tmp_Legs; tmp_Legs = NULL; }
 
 		if (tmp_Return_Node != NULL) { return tmp_Return_Node->NID; }
-		return NULL;
+		return 0;
 	}
   
 
@@ -367,7 +367,7 @@ public:
 		if (tmp_Legs != NULL) { delete[] tmp_Legs; tmp_Legs = NULL; }
 
 		if (tmp_Return_Node != NULL) { return tmp_Return_Node->NID; }
-		return NULL;
+		return 0;
 	}
 
   

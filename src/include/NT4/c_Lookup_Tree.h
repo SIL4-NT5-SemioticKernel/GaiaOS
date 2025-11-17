@@ -178,7 +178,7 @@ public:
 		}
 		else 
 		{
-			return NULL;
+			return 0;
 		}
 	}
 
