@@ -1812,19 +1812,23 @@ private:
             flagFile >> flagValue;
 
             // Read the value from the flag file
-            if (flagValue != "")
-            {
-                // Check if the value is 1
-                if (flagValue != "")
-                {
-                    flagFile.close();
-                    return 1;
-                }
-                else
-                {
-                    flagFile.close();
-                }
-            }
+			// Check if the value is 1
+			if (flagValue != "")
+			{
+				flagFile.close();
+				std::ofstream flagFile("Control_Panel_Flag.ssv", std::ios::trunc);
+				
+				if (flagFile.is_open())
+				{
+					flagFile << "0";
+				}
+				else
+				{
+					std::cerr << "\nUnable to open flag file for clearing.\n";
+				}
+
+				return 1;
+			}
             else
             {
                 flagFile.close();
@@ -2310,7 +2314,7 @@ public:
                     tmp_Corrupt_Message[rand() % tmp_Message.length()] = char((std::rand() % 32) + 32);
                 }
 
-                std::cout << "STANDBY[" << tmp_Corrupt_Message << "]";
+                std::cout << "STANDBY[" << tmp_Corrupt_Message << "]" << Tick << "   ";
             }
 
             int tmp_Result = check_Control_Panel_Flag();
