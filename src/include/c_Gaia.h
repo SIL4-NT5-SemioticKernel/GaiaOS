@@ -1813,7 +1813,7 @@ private:
 
             // Read the value from the flag file
 			// Check if the value is 1
-			if (flagValue != "")
+			if (flagValue == "1")
 			{
 				flagFile.close();
 				std::ofstream flagFile("Control_Panel_Flag.ssv", std::ios::trunc);
@@ -2285,7 +2285,7 @@ public:
         int tmp_Distance = -250;
         int tmp_MAX = 250;
 
-        std::string tmp_Message = "______________________________IDLING______________________________";
+        std::string tmp_Message = "________________________IDLING________________________";
         std::string tmp_Corrupt_Message = "";
 
         flg_Direction = 1;
