@@ -1842,6 +1842,48 @@ private:
         return 0;
     }
 
+    //Update_Flag.ssv - Used to signal a step in the loop. Set by the user or an external program after inputs and controls are set and ready to have a function executed.
+    int check_Update_Flag()
+    {
+        std::ifstream flagFile("Update_Flag.ssv");
+        std::string flagValue = "";
+
+        // Check if the flag file exists and can be opened
+        if (flagFile.is_open())
+        {
+            flagFile >> flagValue;
+
+            // Read the value from the flag file
+			// Check if the value is 1
+			if (flagValue == "1")
+			{
+				flagFile.close();
+				std::ofstream flagFile("Update_Flag.ssv", std::ios::trunc);
+				
+				if (flagFile.is_open())
+				{
+					flagFile << "0";
+				}
+				else
+				{
+					std::cerr << "\nUnable to open update flag file for clearing.\n";
+				}
+
+				return 1;
+			}
+            else
+            {
+                flagFile.close();
+            }
+        }
+        else
+        {
+            std::cerr << "\nUnable to open update flag file.\n";
+        }
+
+        return 0;
+    }
+
     int execute_Control_Panel_Buffer()
     {
 
@@ -2338,8 +2380,11 @@ public:
 
             }
 			
+			tmp_Result = 0;
+			tmp_Result = check_Update_Flag();
+			
 			//If the flag is set to run then execute the system update script
-			if (flg_Run_Update)
+			if (tmp_Result)
 			{
 				tmp_Result = interpret_File("./Scripts/update.txt");
 				if (tmp_Result == 0)

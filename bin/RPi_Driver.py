@@ -20,8 +20,7 @@ US_TIMEOUT            = (MAX_US_RANGE_CM * 2) / 34300 + 0.005
                                                 # Seconds to wait for echo (~30 ms + margin)
 
 # Control-Panel files (written atomically)
-CONTROL_PANEL_FILE      = Path("Control_Panel.ssv")
-CONTROL_PANEL_FLAG_FILE = Path("Control_Panel_Flag.ssv")
+UPDATE_FLAG_FILE = Path("Control_Panel_Flag.ssv")
 
 # ——————————————————————————————————————————————————————————————————————————————
 # Set up logging
@@ -446,15 +445,15 @@ def bridge_loop():
             last_check = now
             try:
                 flag = (
-                    CONTROL_PANEL_FLAG_FILE.read_text().strip()
-                    if CONTROL_PANEL_FLAG_FILE.exists()
+                    UPDATE_FLAG_FILE.read_text().strip()
+                    if UPDATE_FLAG_FILE.exists()
                     else None
                 )
                 if flag != "1":
                     logger.debug("Control_Panel_Flag not 1 → running bridge_once()")
                     bridge_once()
                     #write_atomic(CONTROL_PANEL_FILE,       "eval Testermon.txt 0.0\n")
-                    write_atomic(CONTROL_PANEL_FLAG_FILE,  "1\n")
+                    write_atomic(UPDATE_FLAG_FILE,  "1\n")
                     # LOG: Notified control panel
                     logger.info("Wrote Control_Panel.ssv and set Control_Panel_Flag.ssv to 1")
             except Exception:
