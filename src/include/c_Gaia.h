@@ -1349,40 +1349,59 @@ public:
 		*/
 		
 		//Chat GPT generated boredome function when I told it to procedurally iterate through the efferent instead of randomly flailing
+		// Boredom-driven procedural efferent testing.
+		// When bored, we cycle through efferents in order, and for each one we
+		// hold it high for about 1/3 of the Chrono_Depth worth of ticks.
+		// During the test we keep all other efferents at 0 so the behaviour is "clean".
+
 		if (flg_Bored && IO.Efferent_Count > 0)
 		{
-			// keep your 1-in-5 gating if you like the "occasionally poke" behaviour
-			if ((rand() % 5) == 0)
+			// Persistent state across calls
+			static int s_Bored_Test_Index = 0;   // which efferent we are testing
+			static int s_Bored_Test_Ticks = 0;   // how many ticks spent on this efferent
+
+			// Make sure index stays in range (in case efferent count changes)
+			if (s_Bored_Test_Index >= IO.Efferent_Count)
 			{
-				// persistent index across calls
-				static int s_Boredom_Test_Index = 0;
+				s_Bored_Test_Index = 0;
+				s_Bored_Test_Ticks = 0;
+			}
 
-				// sanity: wrap index if efferent count changed
-				if (s_Boredom_Test_Index >= IO.Efferent_Count)
+			// How long to hold each efferent in the "on" state:
+			//  - use 1/3 of Chrono_Depth,
+			//  - but never less than 1 tick.
+			int testDuration = TSG.Chrono_Depth / 3;
+			if (testDuration < 1) { testDuration = 1; }
+
+			// Default baseline: all efferents off.
+			for (int e = 0; e < IO.Efferent_Count; ++e)
+			{
+				Output_Signals[e] = 0;
+			}
+
+			// Turn *one* efferent "on": the one we're currently testing.
+			Output_Signals[s_Bored_Test_Index] = 1;
+
+			// Optional debug message (comment out if noisy)
+			// std::cout << "\nGaia is bored... testing efferent[" << s_Bored_Test_Index
+			//           << "] tick " << s_Bored_Test_Ticks << "/" << testDuration;
+
+			// Advance the per-eff test tick counter
+			s_Bored_Test_Ticks++;
+
+			// Once we've held this efferent for long enough, move to the next one
+			if (s_Bored_Test_Ticks >= testDuration)
+			{
+				s_Bored_Test_Ticks = 0;
+				s_Bored_Test_Index++;
+
+				if (s_Bored_Test_Index >= IO.Efferent_Count)
 				{
-					s_Boredom_Test_Index = 0;
-				}
-
-				// optional: clear all outputs before testing the next one
-				for (int i = 0; i < IO.Efferent_Count; i++)
-				{
-					Output_Signals[i] = 0;
-				}
-
-				// activate the current efferent under test
-				Output_Signals[s_Boredom_Test_Index] = 1;
-
-				std::cout << "\n Gaia is bored... testing efferent[" 
-						  << s_Boredom_Test_Index << "]";
-
-				// move on to the next efferent for the next bored tick
-				s_Boredom_Test_Index++;
-				if (s_Boredom_Test_Index >= IO.Efferent_Count)
-				{
-					s_Boredom_Test_Index = 0;
+					s_Bored_Test_Index = 0; // wrap around
 				}
 			}
 		}
+
 
 		
         // Log boredom flag over time.
