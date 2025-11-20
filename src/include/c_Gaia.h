@@ -1125,7 +1125,30 @@ public:
         }
 
 		
-		
+		//ChatGPT coded this block.
+		// Log per-effector output scores (confidence breakdown) as a snapshot.
+        // Each row: efferent_index  Fn  SA  DM  RC  Chrg
+        {
+            std::ofstream osf("./System_State_Files/output_scores.ssv", std::ios::trunc);
+            if (osf.is_open())
+            {
+                for (int cou_E = 0; cou_E < IO.Efferent_Count; ++cou_E)
+                {
+                    osf << cou_E; // efferent index
+                    // [0] Composite Fn [1] SA [2] DM [3] RC [4] Charge
+                    for (int k = 0; k < 5; ++k)
+                    {
+                        osf << " " << tmp_Output_Signals[cou_E][k];
+                    }
+                    osf << "\n";
+                }
+            }
+            else
+            {
+                std::cerr << "\n[log_Output_Scores] Unable to open ./System_State_Files/output_scores.ssv\n";
+            }
+        }
+
 		
         Tick_Count++;
 
@@ -1310,16 +1333,64 @@ public:
 
             Output_Signals[tmp_RanRan_Flail] = 1;
         }
-
+		
+		/*
         if (flg_Bored)
         {
             if ((rand() % 5) == 0)
             {
                 int tmp_RanRan_Flail = rand() % IO.Efferent_Count;
 
-                //Output_Signals[tmp_RanRan_Flail] = 1;
+                Output_Signals[tmp_RanRan_Flail] = 1;
 
                 std::cout << "\n Gaia is bored...";
+            }
+        }
+		*/
+		
+		//Chat GPT generated boredome function when I told it to procedurally iterate through the efferent instead of randomly flailing
+		if (flg_Bored && IO.Efferent_Count > 0)
+		{
+			// keep your 1-in-5 gating if you like the "occasionally poke" behaviour
+			if ((rand() % 5) == 0)
+			{
+				// persistent index across calls
+				static int s_Boredom_Test_Index = 0;
+
+				// sanity: wrap index if efferent count changed
+				if (s_Boredom_Test_Index >= IO.Efferent_Count)
+				{
+					s_Boredom_Test_Index = 0;
+				}
+
+				// optional: clear all outputs before testing the next one
+				for (int i = 0; i < IO.Efferent_Count; i++)
+				{
+					Output_Signals[i] = 0;
+				}
+
+				// activate the current efferent under test
+				Output_Signals[s_Boredom_Test_Index] = 1;
+
+				std::cout << "\n Gaia is bored... testing efferent[" 
+						  << s_Boredom_Test_Index << "]";
+
+				// move on to the next efferent for the next bored tick
+				s_Boredom_Test_Index++;
+				if (s_Boredom_Test_Index >= IO.Efferent_Count)
+				{
+					s_Boredom_Test_Index = 0;
+				}
+			}
+		}
+
+		
+        // Log boredom flag over time.
+        {
+            std::ofstream bf("./System_State_Files/boredom.ssv", std::ios::app);
+            if (bf.is_open())
+            {
+                bf << Tick_Count << " " << (flg_Bored ? 1 : 0) << "\n";
             }
         }
 
@@ -2454,9 +2525,35 @@ public:
 			log_Current_Status();
 			log_Current_Onions();
 			log_Deviation_Mapping();
+			log_Current_Projection();
         }
     }
 	
+    // Snapshot of current projected trajectory (RF = 0 by default).
+    // Each row: chrono_index  chan0  chan1  ...  chanM
+    void log_Current_Projection(int p_RF = 0)
+    {
+        std::vector<std::vector<u_Data>> tmp_Projection = API.get_Current_Projection(p_RF);
+
+        std::ofstream projFile("./System_State_Files/projection.ssv", std::ios::trunc);
+        if (!projFile.is_open())
+        {
+            std::cerr << "\n[log_Current_Projection] Unable to open ./System_State_Files/projection.ssv\n";
+            return;
+        }
+
+        for (size_t cou_C = 0; cou_C < tmp_Projection.size(); ++cou_C)
+        {
+            projFile << cou_C; // chrono index
+
+            for (size_t cou_R = 0; cou_R < tmp_Projection[cou_C].size(); ++cou_R)
+            {
+                projFile << " " << tmp_Projection[cou_C][cou_R].D;
+            }
+
+            projFile << "\n";
+        }
+    }
 	
 	// Snapshot of current deviation mapping per afferent.
     // Format (single row):

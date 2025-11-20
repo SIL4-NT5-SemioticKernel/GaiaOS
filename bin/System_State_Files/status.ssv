@@ -1,5 +1,5 @@
-ENGINE Session_Tick 1729 
-ENGINE Processor_Tick 3 
+ENGINE Session_Tick 2012 
+ENGINE Processor_Tick 47 
 ENGINE Run_Update 0 
 ENGINE Exit_Flag 0 
 IO Afferent_Count 1 
@@ -12,7 +12,7 @@ EFFERENT E1_Value 0
 EFFERENT E2_Value 0 
 NT4 Chrono_Depth 10 
 NT4 Raw_Depth 6 
-NT4 Node_Count 38 
+NT4 Node_Count 46 
 NT4 Bored 1 
 FLAGS Control_Panel_Flag 0 
 FLAGS Update_Flag 0 
