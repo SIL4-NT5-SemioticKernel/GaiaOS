@@ -2545,8 +2545,68 @@ public:
 			log_Current_Onions();
 			log_Deviation_Mapping();
 			log_Current_Projection();
+			log_IO_History();
         }
     }
+	
+	// Append current afferent/efferent values as a time-series.
+	// afferent_log.ssv: Tick A0 A1 A2 ...
+	// efferent_log.ssv: Tick E0 E1 E2 ...
+	void log_IO_History()
+	{
+		// --- Afferent log ---
+		{
+			std::ofstream af_log("System_State_Files/afferent_log.ssv", std::ios::app);
+			if (!af_log.is_open())
+			{
+				std::cerr << "\n[log_IO_History] Unable to open System_State_Files/afferent_log.ssv\n";
+			}
+			else
+			{
+				af_log.setf(std::ios::fixed);
+				af_log.precision(6);
+
+				af_log << Tick;
+				for (int i = 0; i < API.IO.Afferent_Count; ++i)
+				{
+					double val = 0.0;
+					if (API.IO.Afferent && API.IO.Afferent[i])
+					{
+						val = API.IO.Afferent[i]->get_Value_Data();
+					}
+					af_log << " " << val;
+				}
+				af_log << "\n";
+			}
+		}
+
+		// --- Efferent log ---
+		{
+			std::ofstream ef_log("System_State_Files/efferent_log.ssv", std::ios::app);
+			if (!ef_log.is_open())
+			{
+				std::cerr << "\n[log_IO_History] Unable to open System_State_Files/efferent_log.ssv\n";
+			}
+			else
+			{
+				ef_log.setf(std::ios::fixed);
+				ef_log.precision(6);
+
+				ef_log << Tick;
+				for (int j = 0; j < API.IO.Efferent_Count; ++j)
+				{
+					double val = 0.0;
+					if (API.IO.Efferent && API.IO.Efferent[j])
+					{
+						val = API.IO.Efferent[j]->get_Value_Data();
+					}
+					ef_log << " " << val;
+				}
+				ef_log << "\n";
+			}
+		}
+	}
+
 	
     // Snapshot of current projected trajectory (RF = 0 by default).
     // Each row: chrono_index  chan0  chan1  ...  chanM

@@ -38,6 +38,9 @@ TRACE_TOTAL_FILE         = os.path.join("System_State_Files", "trace_total_outpu
 NODE_COUNT_FILE          = os.path.join("System_State_Files", "node_count.ssv")
 BOREDOM_FILE             = os.path.join("System_State_Files", "boredom.ssv")
 
+AFFERENT_LOG_FILE  = os.path.join("System_State_Files", "afferent_log.ssv")
+EFFERENT_LOG_FILE  = os.path.join("System_State_Files", "efferent_log.ssv")
+
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
@@ -234,6 +237,53 @@ def load_ssv_xy(path: str):
         return [], []
     return xs, ys
 
+def load_io_log(path: str):
+    """
+    Load an I/O log SSV of the form:
+        Tick v0 v1 v2 ...
+    Returns:
+        ticks:  [t0, t1, ...]
+        series: [[ch0(t0..), ch0(t1..), ...], [ch1(...)] ...]
+    """
+    if not os.path.exists(path):
+        return [], []
+
+    ticks = []
+    rows = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("#") or line.startswith("//"):
+                    continue
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                try:
+                    t = float(parts[0])
+                    vals = [float(v) for v in parts[1:]]
+                except ValueError:
+                    continue
+                ticks.append(t)
+                rows.append(vals)
+    except Exception:
+        return [], []
+
+    if not rows:
+        return [], []
+
+    n_series = max(len(r) for r in rows)
+    series = [[] for _ in range(n_series)]
+    for r in rows:
+        for i in range(n_series):
+            v = r[i] if i < len(r) else float("nan")
+            series[i].append(v)
+
+    return ticks, series
+
+
 # ---------------------------------------------------------------------------
 # Main UI
 # ---------------------------------------------------------------------------
@@ -253,6 +303,8 @@ class GaiaConfigUI(tk.Tk):
         self.projection_auto_var  = tk.BooleanVar(value=False)
         self.scores_auto_var      = tk.BooleanVar(value=False)
         self.trace_auto_var       = tk.BooleanVar(value=False)
+        self.io_hist_auto_var     = tk.BooleanVar(value=False)
+
 
         # track engine tick delta on summary tab
         self._last_session_tick = None
@@ -283,6 +335,7 @@ class GaiaConfigUI(tk.Tk):
 
         self.summary_frame   = ttk.Frame(self.nb)
         self.io_frame        = ttk.Frame(self.nb)
+        self.io_hist_frame   = ttk.Frame(self.nb)
         self.ctrl_frame      = ttk.Frame(self.nb)
         self.autoexec_frame  = ttk.Frame(self.nb)
         self.onion_frame     = ttk.Frame(self.nb)
@@ -296,6 +349,7 @@ class GaiaConfigUI(tk.Tk):
         # Order: put Status/Goals first as the friendly front tab
         self.nb.add(self.summary_frame,   text="Status / Goals")
         self.nb.add(self.io_frame,        text="I/O State")
+        self.nb.add(self.io_hist_frame,   text="I/O History")
         self.nb.add(self.ctrl_frame,      text="Control Panel")
         self.nb.add(self.autoexec_frame,  text="Autoexec")
         self.nb.add(self.onion_frame,     text="Onion Snapshot")
@@ -308,6 +362,7 @@ class GaiaConfigUI(tk.Tk):
 
         self._build_summary_tab()
         self._build_io_tab()
+        self._build_io_history_tab()
         self._build_ctrl_tab()
         self._build_autoexec_tab()
         self._build_onion_tab()
@@ -639,6 +694,143 @@ class GaiaConfigUI(tk.Tk):
             return
         self.refresh_io()
         self.after(1000, self._schedule_io_refresh)
+
+    # --- I/O History tab (line plots) -------------------------------------
+
+    def _build_io_history_tab(self):
+        top = ttk.Frame(self.io_hist_frame)
+        top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        ctrl = ttk.Frame(top)
+        ctrl.pack(fill=tk.X, pady=(0, 5))
+
+        ttk.Label(
+            ctrl,
+            text="Afferent/Efferent logs (afferent_log.ssv, efferent_log.ssv)"
+        ).pack(side=tk.LEFT)
+
+        io_hist_auto_chk = ttk.Checkbutton(
+            ctrl,
+            text="Auto-refresh",
+            variable=self.io_hist_auto_var,
+            command=self.on_io_hist_auto_toggle,
+        )
+        io_hist_auto_chk.pack(side=tk.RIGHT)
+
+        ttk.Button(
+            ctrl,
+            text="Refresh now",
+            command=self.refresh_io_history,
+        ).pack(side=tk.RIGHT, padx=(0, 8))
+
+        body = ttk.Frame(top)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        self.io_hist_body = body
+
+        if HAS_MPL:
+            # Two stacked plots: afferents and efferents
+            fig, (ax_aff, ax_eff) = plt.subplots(2, 1, sharex=True)
+            fig.tight_layout()
+            self.io_hist_fig = fig
+            self.io_hist_ax_aff = ax_aff
+            self.io_hist_ax_eff = ax_eff
+
+            self.io_hist_canvas = FigureCanvasTkAgg(fig, master=body)
+            self.io_hist_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        else:
+            # Text fallback if matplotlib not available
+            self.io_hist_fig = None
+            self.io_hist_ax_aff = None
+            self.io_hist_ax_eff = None
+            self.io_hist_canvas = None
+
+            self.io_hist_text = tk.Text(body, wrap="none")
+            yscroll = ttk.Scrollbar(
+                body, orient="vertical", command=self.io_hist_text.yview
+            )
+            xscroll = ttk.Scrollbar(
+                body, orient="horizontal", command=self.io_hist_text.xview
+            )
+            self.io_hist_text.configure(
+                yscrollcommand=yscroll.set, xscrollcommand=xscroll.set
+            )
+            self.io_hist_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            yscroll.pack(side=tk.RIGHT, fill=tk.Y)
+            xscroll.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # initial draw
+        self.refresh_io_history()
+
+    def refresh_io_history(self):
+        ticks_a, series_a = load_io_log(AFFERENT_LOG_FILE)
+        ticks_e, series_e = load_io_log(EFFERENT_LOG_FILE)
+
+        if HAS_MPL and self.io_hist_fig is not None:
+            self.io_hist_fig.clf()
+            self.io_hist_ax_aff = self.io_hist_fig.add_subplot(211)
+            self.io_hist_ax_eff = self.io_hist_fig.add_subplot(212, sharex=self.io_hist_ax_aff)
+
+            any_aff = False
+            if ticks_a and series_a:
+                for idx, s in enumerate(series_a):
+                    self.io_hist_ax_aff.plot(ticks_a, s, label=f"A{idx}")
+                self.io_hist_ax_aff.set_ylabel("Afferent")
+                self.io_hist_ax_aff.legend(loc="upper right", fontsize="x-small")
+                any_aff = True
+
+            any_eff = False
+            if ticks_e and series_e:
+                for idx, s in enumerate(series_e):
+                    self.io_hist_ax_eff.plot(ticks_e, s, label=f"E{idx}")
+                self.io_hist_ax_eff.set_ylabel("Efferent")
+                self.io_hist_ax_eff.set_xlabel("Tick")
+                self.io_hist_ax_eff.legend(loc="upper right", fontsize="x-small")
+                any_eff = True
+
+            if not any_aff and not any_eff:
+                self.io_hist_ax_aff.text(
+                    0.5, 0.5,
+                    "No I/O log data yet",
+                    ha="center", va="center",
+                    transform=self.io_hist_ax_aff.transAxes,
+                )
+
+            self.io_hist_canvas.draw()
+            self.status_var.set("Refreshed I/O history.")
+        else:
+            # Text mode: show last 50 lines of each log
+            self.io_hist_text.delete("1.0", tk.END)
+
+            def summarize(path, label):
+                if not os.path.exists(path):
+                    self.io_hist_text.insert(
+                        tk.END, f"[{label}] {path} not found\n\n"
+                    )
+                    return
+                with open(path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                self.io_hist_text.insert(
+                    tk.END, f"[{label}] {path} (last 50 lines):\n"
+                )
+                for line in lines[-50:]:
+                    self.io_hist_text.insert(tk.END, line)
+                self.io_hist_text.insert(tk.END, "\n")
+
+            summarize(AFFERENT_LOG_FILE, "Afferent")
+            summarize(EFFERENT_LOG_FILE, "Efferent")
+            self.status_var.set("Refreshed I/O history (text mode).")
+
+    def on_io_hist_auto_toggle(self):
+        if self.io_hist_auto_var.get():
+            self._schedule_io_hist_refresh()
+
+    def _schedule_io_hist_refresh(self):
+        if not self.io_hist_auto_var.get():
+            return
+        self.refresh_io_history()
+        self.after(1000, self._schedule_io_hist_refresh)
+
 
     # --- Control Panel tab -------------------------------------------------
 
@@ -1168,6 +1360,7 @@ class GaiaConfigUI(tk.Tk):
     def refresh_all(self):
         self.refresh_summary()
         self.refresh_io()
+        self.refresh_io_history()
         self.load_control_panel()
         self.load_autoexec()
         self.load_onion_snapshot()
