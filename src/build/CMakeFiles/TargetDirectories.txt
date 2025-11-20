@@ -1,3 +1,0 @@
-C:/GitRepos/GaiaOS.Exploratory_Build/GaiaOS/src/build/CMakeFiles/NT4.dir
-C:/GitRepos/GaiaOS.Exploratory_Build/GaiaOS/src/build/CMakeFiles/ALL_BUILD.dir
-C:/GitRepos/GaiaOS.Exploratory_Build/GaiaOS/src/build/CMakeFiles/ZERO_CHECK.dir
