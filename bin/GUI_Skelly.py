@@ -330,6 +330,8 @@ class GaiaConfigUI(tk.Tk):
     # --- Layout scaffold ---------------------------------------------------
 
     def _build_widgets(self):
+        self.status_var = tk.StringVar(value="Ready.")
+        
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill=tk.BOTH, expand=True)
 
@@ -374,7 +376,6 @@ class GaiaConfigUI(tk.Tk):
         self._build_trace_tab()
 
         # Status bar
-        self.status_var = tk.StringVar(value="Ready.")
         status = ttk.Label(self, textvariable=self.status_var, anchor="w")
         status.pack(fill=tk.X, side=tk.BOTTOM)
 

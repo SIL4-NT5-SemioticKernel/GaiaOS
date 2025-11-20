@@ -14,13 +14,13 @@ import smbus2
 # ——————————————————————————————————————————————————————————————————————————————
 CONFIG_FILE           = "pinout.cfg"
 POLL_INTERVAL         = 0.01            # Seconds between loop iterations
-UPDATE_CHECK_INTERVAL = 1.0             # Seconds between checking Control_Panel flag
+UPDATE_CHECK_INTERVAL = 1.0             # Seconds between checking Update flag
 MAX_US_RANGE_CM       = 450             # Max ultrasonic range in cm
 US_TIMEOUT            = (MAX_US_RANGE_CM * 2) / 34300 + 0.005
                                                 # Seconds to wait for echo (~30 ms + margin)
 
 # Control-Panel files (written atomically)
-UPDATE_FLAG_FILE = Path("Control_Panel_Flag.ssv")
+UPDATE_FLAG_FILE = Path("Update_Flag.ssv")
 
 # ——————————————————————————————————————————————————————————————————————————————
 # Set up logging
@@ -450,12 +450,12 @@ def bridge_loop():
                     else None
                 )
                 if flag != "1":
-                    logger.debug("Control_Panel_Flag not 1 → running bridge_once()")
+                    logger.debug("Update_Flag not 1 → running bridge_once()")
                     bridge_once()
-                    #write_atomic(CONTROL_PANEL_FILE,       "eval Testermon.txt 0.0\n")
+                    #write_atomic(Update_FILE,       "eval Testermon.txt 0.0\n")
                     write_atomic(UPDATE_FLAG_FILE,  "1\n")
                     # LOG: Notified control panel
-                    logger.info("Wrote Control_Panel.ssv and set Control_Panel_Flag.ssv to 1")
+                    logger.info("Wrote Update.ssv and set Update_Flag.ssv to 1")
             except Exception:
                 logger.exception("Control panel bridge error")
 
