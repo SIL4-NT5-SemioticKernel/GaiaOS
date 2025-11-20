@@ -1044,7 +1044,9 @@ public:
         std::cout << "\n\n\t Total Traces Found: " << tmp_Output_Depth;
         std::cout << "\n\t\t Almost Valid Traces Found: " << tmp_Almost_Valid_Traces;
         std::cout << "\n\t\t Valid Traces Found: " << tmp_Valid_Traces;
-
+		
+		//Replacing this with chat gippity code to direct the output to ./System_State_Files/x.ssv for the NegentropicNavigator
+		/*
         std::ofstream tmp_OF;
         std::string tmp_FName = "./GaiaTesting/" + p_FName + ".Valid_Traces.ssv";
         tmp_OF.open(tmp_FName, std::ios::app);
@@ -1075,7 +1077,56 @@ public:
         tmp_OTOF.open(tmp_FName, std::ios::app);
         tmp_OTOF << Tick_Count << " " << tmp_Output_Depth << "\n";
         tmp_OTOF.close();
-        
+        */
+		        // --- Trace statistics logging to System_State_Files ---
+
+        // Valid traces over time
+        {
+            std::ofstream tmp_OF("./System_State_Files/trace_valid.ssv", std::ios::app);
+            if (tmp_OF.is_open())
+            {
+                tmp_OF << Tick_Count << " " << tmp_Valid_Traces << "\n";
+            }
+        }
+
+        // Nearly valid traces over time
+        {
+            std::ofstream tmp_AOF("./System_State_Files/trace_nearly_valid.ssv", std::ios::app);
+            if (tmp_AOF.is_open())
+            {
+                tmp_AOF << Tick_Count << " " << tmp_Almost_Valid_Traces << "\n";
+            }
+        }
+
+        // Node count over time
+        {
+            std::ofstream tmp_NOF("./System_State_Files/node_count.ssv", std::ios::app);
+            if (tmp_NOF.is_open())
+            {
+                tmp_NOF << Tick_Count << " " << TSG.NT4_Core.Base.Nodes.Node_Count << "\n";
+            }
+        }
+
+        // Boredom detection is still computed the same way, we just log separately.
+        if ((Previous_Node_Count - TSG.NT4_Core.Base.Nodes.Node_Count) == 0)
+        {
+            flg_Bored = true;
+        }
+
+        Previous_Node_Count = int(TSG.NT4_Core.Base.Nodes.Node_Count);
+
+        // Total output traces over time
+        {
+            std::ofstream tmp_OTOF("./System_State_Files/trace_total_output.ssv", std::ios::app);
+            if (tmp_OTOF.is_open())
+            {
+                tmp_OTOF << Tick_Count << " " << tmp_Output_Depth << "\n";
+            }
+        }
+
+		
+		
+		
         Tick_Count++;
 
         float tmp_High_Fn = 0;
@@ -1701,6 +1752,9 @@ class c_GaiaOS_Text_Server
 
     //Current server tick.
     int Tick;
+	
+	//Current Neuro-Semiotic Symbol Processor engine tick.
+    int Tick_Processor;
 
     //Exit flag to allow for exit after startup if the user puts 'exit' into the autoexec file, needed for CLI capabilities.
     bool flg_Exit;
@@ -1978,6 +2032,7 @@ public:
     c_GaiaOS_Text_Server(std::string p_Autoexec = "../autoexec.ssv")
     {
         Tick = 0;
+        Tick_Processor = 0;
         flg_Exit = false;
 		flg_Run_Update = false;
 
@@ -2391,11 +2446,184 @@ public:
 				{
 					std::cerr << "\n\n   Error: Failed to execute system update script!\n\n";
 				}
+				API.Tick_Count++;
+				Tick_Processor++;
 			}
             Tick++;
+			
+			log_Current_Status();
+			log_Current_Onions();
+			log_Deviation_Mapping();
         }
     }
+	
+	
+	// Snapshot of current deviation mapping per afferent.
+    // Format (single row):
+    //   0  dev[0] dev[1] ... dev[N-1]
+    void log_Deviation_Mapping()
+    {
+        std::vector<double> tmp_Deviation = API.get_Current_Deviation_Set();
 
+        std::ofstream devFile("./System_State_Files/deviation_mapping.ssv", std::ios::trunc);
+        if (!devFile.is_open())
+        {
+            std::cerr << "\n[log_Deviation_Mapping] Unable to open ./System_State_Files/deviation_mapping.ssv\n";
+            return;
+        }
+
+        // Use first column as an index (0) so DVI.2-style tools can treat it as a "row id".
+        devFile << 0;
+        for (size_t i = 0; i < tmp_Deviation.size(); ++i)
+        {
+            devFile << " " << tmp_Deviation[i];
+        }
+        devFile << "\n";
+    }
+
+	
+	void log_Current_Onions()
+	{
+		std::ofstream onion_File("System_State_Files/onions.ssv", std::ios::trunc);
+		if (!onion_File.is_open())
+		{
+			std::cerr << "\nUnable to open System_State_Files/onions.ssv for writing.\n";
+			return;
+		}
+
+		// Optional: make the numbers a bit prettier / stable
+		onion_File.setf(std::ios::fixed);
+		onion_File.precision(4);
+
+		// One block per afferent
+		for (int a = 0; a < API.IO.Afferent_Count; a++)
+		{
+			if (!API.IO.Afferent || !API.IO.Afferent[a]) { continue; }
+
+			c_Granulator &G = API.IO.Afferent[a]->Granulator;
+
+			// If this afferent has no bands configured yet, skip it
+			if (G.Count <= 0 || !G.Bottom || !G.Top || !G.Mid) { continue; }
+
+			for (int band = 0; band < G.Count; band++)
+			{
+				double bottom = G.Bottom[band];
+				double top    = G.Top[band];
+				double mid    = G.Mid[band];
+
+				// domain, afferent id, band index, bottom, top, mid
+				onion_File << "ONION "
+						   << "A" << a << " "
+						   << band << " "
+						   << bottom << " "
+						   << top    << " "
+						   << mid    << " \n";
+			}
+		}
+
+		onion_File.close();
+	}
+
+		
+	void log_Current_Status()
+	{
+		std::ofstream status_File("System_State_Files/status.ssv", std::ios::trunc);
+		if (!status_File.is_open())
+		{
+			std::cout << "\nUnable to open System_State_Files/status.ssv for writing.\n";
+			std::cerr << "\nUnable to open System_State_Files/status.ssv for writing.\n";
+			return;
+		}
+
+		// --- Engine-level status ---
+		status_File << "ENGINE Session_Tick "   << Tick           << " \n";
+		status_File << "ENGINE Processor_Tick " << API.Tick_Count << " \n";
+
+		// Optional: a couple of simple engine flags
+		status_File << "ENGINE Run_Update " << (flg_Run_Update ? 1 : 0) << " \n";
+		status_File << "ENGINE Exit_Flag "  << (flg_Exit       ? 1 : 0) << " \n";
+
+		// --- I/O summary ---
+		status_File << "IO Afferent_Count " << API.IO.Afferent_Count << " \n";
+		status_File << "IO Efferent_Count " << API.IO.Efferent_Count << " \n";
+
+		// --- Per-afferent status: value / goal / deviation ---
+		for (int cou_A = 0; cou_A < API.IO.Afferent_Count; cou_A++)
+		{
+			double val  = 0.0;
+			double goal = 0.0;
+			double dev  = 0.0;
+
+			if (API.IO.Afferent && API.IO.Afferent[cou_A])
+			{
+				val  = API.IO.Afferent[cou_A]->get_Value_Data();
+				goal = API.IO.Afferent[cou_A]->get_Goal();
+				dev  = API.IO.Afferent[cou_A]->get_Value_Deviation();
+			}
+
+			status_File << "AFFERENT A" << cou_A << "_Value " << val  << " \n";
+			status_File << "AFFERENT A" << cou_A << "_Goal "  << goal << " \n";
+			status_File << "AFFERENT A" << cou_A << "_Dev "   << dev  << " \n";
+		}
+
+		// --- Per-efferent status: current value / drive ---
+		for (int cou_E = 0; cou_E < API.IO.Efferent_Count; cou_E++)
+		{
+			double val = 0.0;
+
+			if (API.IO.Efferent && API.IO.Efferent[cou_E])
+			{
+				val = API.IO.Efferent[cou_E]->get_Value_Data();
+			}
+
+			status_File << "EFFERENT E" << cou_E << "_Value " << val << " \n";
+		}
+
+    // --- NT4 / construct-network status ---
+    status_File << "NT4 Chrono_Depth "
+                << API.TSG.Chrono_Depth << " \n";
+
+    status_File << "NT4 Raw_Depth "
+                << API.TSG.Raw_Depth << " \n";
+
+    status_File << "NT4 Node_Count "
+                << API.TSG.NT4_Core.Base.Nodes.Node_Count << " \n";
+
+    bool tmp_Bored =
+        (API.Previous_Node_Count ==
+         int(API.TSG.NT4_Core.Base.Nodes.Node_Count));
+
+    status_File << "NT4 Bored " << (tmp_Bored ? 1 : 0) << " \n";
+
+    // --- External flags (peek without clearing) ---
+    {
+        std::string flagValue = "missing";
+        std::ifstream flagFile("Control_Panel_Flag.ssv");
+        if (flagFile.is_open())
+        {
+            flagValue.clear();
+            flagFile >> flagValue;
+            if (flagValue.empty()) { flagValue = "0"; }
+        }
+        status_File << "FLAGS Control_Panel_Flag " << flagValue << " \n";
+    }
+
+    {
+        std::string flagValue = "missing";
+        std::ifstream flagFile("Update_Flag.ssv");
+        if (flagFile.is_open())
+        {
+            flagValue.clear();
+            flagFile >> flagValue;
+            if (flagValue.empty()) { flagValue = "0"; }
+        }
+        status_File << "FLAGS Update_Flag " << flagValue << " \n";
+    }
+
+    status_File.close();
+}
+
+	
     void rcon()
     {
 
