@@ -2545,7 +2545,7 @@ public:
 			log_Current_Onions();
 			log_Deviation_Mapping();
 			log_Current_Projection();
-			log_IO_History();
+			//log_IO_History(); was moved to gather_Input, so everytime that is called it will log the IO, in the future this may need fixed.
         }
     }
 	
@@ -2556,7 +2556,7 @@ public:
 	{
 		// --- Afferent log ---
 		{
-			std::ofstream af_log("System_State_Files/afferent_log.ssv", std::ios::app);
+			std::ofstream af_log("./System_State_Files/afferent_log.ssv", std::ios::app);
 			if (!af_log.is_open())
 			{
 				std::cerr << "\n[log_IO_History] Unable to open System_State_Files/afferent_log.ssv\n";
@@ -2582,7 +2582,7 @@ public:
 
 		// --- Efferent log ---
 		{
-			std::ofstream ef_log("System_State_Files/efferent_log.ssv", std::ios::app);
+			std::ofstream ef_log("./System_State_Files/efferent_log.ssv", std::ios::app);
 			if (!ef_log.is_open())
 			{
 				std::cerr << "\n[log_IO_History] Unable to open System_State_Files/efferent_log.ssv\n";
@@ -3022,6 +3022,7 @@ public:
 
             tmp_OF.close();
         }
+		log_IO_History();
     }
 
     void gather_Output(std::ifstream* p_File)

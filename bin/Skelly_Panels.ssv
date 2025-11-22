@@ -1,0 +1,17 @@
+# Skelly_Panels.ssv
+# panel_id ; label ; kind ; files
+#
+# Fields:
+#   panel_id  - internal name (no spaces)
+#   label     - what appears in the dropdown
+#   kind      - how to interpret the data: io_log | matrix_rows | xy | xy_multi
+#   files     - one or more paths, comma-separated (relative or absolute)
+
+io_aff        ; Afferent I/O Log         ; io_log      ; System_State_Files/afferent_log.ssv
+io_eff        ; Efferent I/O Log         ; io_log      ; System_State_Files/efferent_log.ssv
+
+devmap        ; Deviation Map            ; matrix_rows ; System_State_Files/deviation_mapping.ssv
+projection    ; Projection Map           ; matrix_rows ; System_State_Files/projection.ssv
+scores        ; Output Scores            ; matrix_rows ; System_State_Files/output_scores.ssv
+
+trace_metrics ; Trace / Node Metrics     ; xy_multi    ; System_State_Files/trace_valid.ssv,System_State_Files/trace_nearly_valid.ssv,System_State_Files/trace_total_output.ssv,System_State_Files/node_count.ssv,System_State_Files/boredom.ssv
