@@ -382,7 +382,7 @@ def bridge_once():
         try:
             raw = eff["path"].read_text().strip()
             val = int(raw)
-            GPIO.output(eff["pin"], GPIO.HIGH if val else GPIO.LOW)
+            GPIO.output(eff["pin"], GPIO.HIGH if val > 0 else GPIO.LOW)
             # LOG: Report efferent action
             logger.info(f"Efferent pin {eff['pin']} set to {'HIGH' if val else 'LOW'} (file {eff['path']})")
         except Exception:
