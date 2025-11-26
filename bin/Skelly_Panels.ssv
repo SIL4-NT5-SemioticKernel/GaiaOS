@@ -1,3 +1,167 @@
+# Skelly_Panels.ssv – Under-The-Hood panel routing table
+#
+# This file tells GUI_Skelly what internal plots exist and how to draw them.
+# Each NON-comment, NON-blank line defines one plot that appears in the
+# "Under The Hood" dropdown.
+#
+# -----------------------------------------------------------------------------
+# BASIC FORMAT
+# -----------------------------------------------------------------------------
+# Lines are semicolon-separated:
+#
+#   panel_id ; label ; kind ; files
+#
+# - panel_id : short internal name, no spaces (e.g. io_aff, devmap, trace_metrics)
+# - label    : human-readable text shown in the GUI dropdown
+# - kind     : tells the GUI how to interpret the file(s)
+# - files    : one or more file paths, comma-separated if multiple
+#
+# All whitespace around fields is ignored. Lines beginning with "#" or "//"
+# are treated as comments and ignored.
+#
+# -----------------------------------------------------------------------------
+# SUPPORTED "kind" VALUES AND EXPECTED FILE FORMATS
+# -----------------------------------------------------------------------------
+#
+# 1) kind = io_log
+#    ----------------
+#    Use this for I/O logs where the first column is time/tick and the rest are
+#    channel values. The GUI will plot one line per channel against tick.
+#
+#    Expected file format:
+#
+#       Tick  v0    v1    v2   ...
+#       0     0.1   0.3   0.0
+#       1     0.2   0.4   0.1
+#       ...
+#
+#    - files: exactly ONE filename
+#    - x-axis: Tick (first column)
+#    - y-series: each remaining column (v0, v1, v2, ...)
+#
+#    Example:
+#       io_aff ; Afferent I/O Log ; io_log ; System_State_Files/afferent_log.ssv
+#
+# -----------------------------------------------------------------------------
+#
+# 2) kind = matrix_rows
+#    --------------------
+#    Use this for 2D data that used to be plotted as heatmaps. Each row of the
+#    matrix becomes a separate line series; the x-axis is the column index.
+#
+#    Expected file format:
+#
+#       index  v0    v1    v2   ...
+#       0      0.1   0.2   0.3
+#       1      0.4   0.5   0.6
+#       2      0.7   0.8   0.9
+#       ...
+#
+#    - The first column ("index") is ignored by the GUI.
+#    - The remaining values in each row become a series:
+#        row 0 -> series 0, row 1 -> series 1, etc.
+#    - x-axis: 0, 1, 2, ... (column index)
+#
+#    Example:
+#       devmap     ; Deviation Map    ; matrix_rows ; System_State_Files/deviation_mapping.ssv
+#       projection ; Projection Map   ; matrix_rows ; System_State_Files/projection.ssv
+#       scores     ; Output Scores    ; matrix_rows ; System_State_Files/output_scores.ssv
+#
+# -----------------------------------------------------------------------------
+#
+# 3) kind = xy
+#    ----------
+#    Use this for a single time-series where each row is (x, y).
+#
+#    Expected file format:
+#
+#       x    y
+#       0    15.0
+#       10   15.5
+#       20   16.2
+#       ...
+#
+#    - files: exactly ONE filename
+#    - x-axis: first column
+#    - y-series: second column (one line)
+#    - series label in legend: basename of the file (e.g. temperature.ssv)
+#
+#    Example:
+#       temp ; Temperature over time ; xy ; System_State_Files/temperature.ssv
+#
+# -----------------------------------------------------------------------------
+#
+# 4) kind = xy_multi
+#    -----------------
+#    Use this when you have several SSV files that share the same x-values
+#    (e.g. tick) and you want them all plotted together as separate lines.
+#
+#    Expected file format for EACH file:
+#
+#       x    y
+#       0    0.1
+#       10   0.2
+#       20   0.15
+#       ...
+#
+#    - files: one or more filenames, comma-separated
+#      (e.g. fileA.ssv,fileB.ssv,fileC.ssv)
+#    - The GUI:
+#        * uses the first non-empty file’s x-column as the master x-axis
+#        * adds one series per file (y-column)
+#        * ignores any file whose length doesn’t match the master x length
+#        * labels each series with the basename of the file
+#
+#    Example:
+#       trace_metrics ; Trace / Node Metrics ; xy_multi ;
+#           System_State_Files/trace_valid.ssv,
+#           System_State_Files/trace_nearly_valid.ssv,
+#           System_State_Files/trace_total_output.ssv,
+#           System_State_Files/node_count.ssv,
+#           System_State_Files/boredom.ssv
+#
+# -----------------------------------------------------------------------------
+# HOW THE GUI USES THIS FILE
+# -----------------------------------------------------------------------------
+#
+# - On startup, GUI_Skelly.py reads Skelly_Panels.ssv.
+# - Each valid line becomes one entry in the "Under The Hood" dropdown.
+# - When you select a panel:
+#     * The GUI loads the referenced file(s) according to "kind".
+#     * It builds x + one or more series[0..N-1].
+#     * Then it applies:
+#         - Sliding window: only last N points if "Window" spinner > 0
+#         - Smoothing: moving average if "Smoothing" spinner > 1
+#         - Downsampling: reduces to ~1000 points max so the Pi doesn’t choke
+#     * Finally, it draws a simple line graph for that panel.
+#
+# This means you can add/remove internal plots without changing the GUI code:
+# just write the SSV file(s) in one of the supported formats and add a line
+# to Skelly_Panels.ssv describing it.
+#
+# -----------------------------------------------------------------------------
+# ADDING YOUR OWN PANELS – QUICK RECAP
+# -----------------------------------------------------------------------------
+#
+# 1) Decide which "kind" matches your data:
+#       - io_log      : Tick v0 v1 ...
+#       - matrix_rows : index v0 v1 ...
+#       - xy          : x y
+#       - xy_multi    : multiple x y files with shared x
+#
+# 2) Make sure the engine writes the SSV file(s) in the correct format.
+#
+# 3) Add a line like:
+#
+#       my_panel_id ; My Fancy Metric ; xy ; System_State_Files/my_metric.ssv
+#
+# 4) Restart the GUI. Your new label appears in the "Under The Hood" dropdown.
+#
+# That’s it. The sliders (window depth, smoothing) and auto-refresh are global
+# behaviors applied to whatever panel is currently selected.
+
+
+
 # Skelly_Panels.ssv
 # panel_id ; label ; kind ; files
 #

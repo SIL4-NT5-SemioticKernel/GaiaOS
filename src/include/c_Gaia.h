@@ -100,6 +100,7 @@ public:
 
         //NULL the new indices.
         Efferent[Efferent_Count] = new c_AE_IO_Element;
+		Efferent[Efferent_Count]->set_Type(1);
 
         //Recover the old data.
         for (int cou_E = 0; cou_E < Efferent_Count; cou_E++)
@@ -2522,8 +2523,14 @@ public:
                 std::cout << "\n\n (o.O)";
 
                 std::cout << tmp_Message;
-
+				
+				
+				//Set the control flag finished file to 1
+				std::ofstream tmp_CFFF("./Control_Panel_Finished.ssv", std::ios::trunc);
+				tmp_CFFF << "1";
+				tmp_CFFF.close();
             }
+			
 			
 			tmp_Result = 0;
 			tmp_Result = check_Update_Flag();
@@ -2538,13 +2545,15 @@ public:
 				}
 				API.Tick_Count++;
 				Tick_Processor++;
+				
+				
+				log_Current_Status();
+				log_Current_Onions();
+				log_Deviation_Mapping();
+				log_Current_Projection();
 			}
             Tick++;
 			
-			log_Current_Status();
-			log_Current_Onions();
-			log_Deviation_Mapping();
-			log_Current_Projection();
 			//log_IO_History(); was moved to gather_Input, so everytime that is called it will log the IO, in the future this may need fixed.
         }
     }
@@ -2566,7 +2575,7 @@ public:
 				af_log.setf(std::ios::fixed);
 				af_log.precision(6);
 
-				af_log << Tick;
+				af_log << API.Tick_Count;
 				for (int i = 0; i < API.IO.Afferent_Count; ++i)
 				{
 					double val = 0.0;

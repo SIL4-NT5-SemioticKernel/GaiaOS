@@ -58,6 +58,9 @@ public:
 
     //The depth of the data.
     int Depth;
+	
+	//The type of element
+	int Type;
 
     c_AE_IO_Element()
     {
@@ -69,6 +72,8 @@ public:
 
         Goal_Deviation = 0;
 		Goal = 0;
+		
+		Type = 0;
     }
 
     void set_Depth(int p_Depth)
@@ -259,7 +264,12 @@ public:
     
         return Delta[p_Index].get_uint64_t();
     }
-
+	
+	void set_Type(int p_Type)
+	{
+		Type = p_Type;
+	}
+	
     //This shifts the output from current to 0.
     void shift_Data()
     {
@@ -284,7 +294,18 @@ public:
     {
         for (int cou_Index = 0; cou_Index < Depth; cou_Index++)
         {
-            std::cout << "\n[" << cou_Index << "] Data: " << Data[cou_Index].get_double() << " << Granulated: " << Granulated[cou_Index].get_double() << " << Delta: " << Delta[cou_Index].get_double() << " << Deviation: " << Deviation[cou_Index];
+			if (Type == 0)
+			{
+				std::cout << "\n[" << cou_Index << "] Data: " << Data[cou_Index].get_double();
+				std::cout << " Granulated: " << Granulated[cou_Index].get_double(); 
+				std::cout << " << Delta: " << Delta[cou_Index].get_double();
+				std::cout << " << Deviation: " << Deviation[cou_Index];
+			}
+			if (Type == 1)
+			{
+				std::cout << "\n[" << cou_Index << "] Data: " << Data[cou_Index].get_double();
+				std::cout << " << Delta: " << Delta[cou_Index].get_double();
+			}
         }
     }
 };
