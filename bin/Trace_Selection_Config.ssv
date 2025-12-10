@@ -1,22 +1,13 @@
-# weights
-weight_SA   1.0
-weight_DM   1.0
-weight_RC   1.0
+weight_SA 1.0
+weight_DM 1.0
+weight_RC 1.0
 weight_Chrg 1.0
-
-# normalization scales
-norm_SA_scale   100.0
-norm_DM_scale   100.0
-norm_RC_scale   100.0
+norm_SA_scale 100.0
+norm_DM_scale 100.0
+norm_RC_scale 100.0
 norm_Chrg_scale 100.0
-
-# validity filters
 min_start_anchor_percent 0
-min_direction_percent    0
+min_direction_percent 0.1
 valid_traces_for_no_streak 250
-
-# scoring / threshold
 score_threshold_modifier 1.0
-
-# boredom detection tweak
 bored_node_delta 0

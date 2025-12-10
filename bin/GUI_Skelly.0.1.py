@@ -591,6 +591,7 @@ class GaiaConfigUI(tk.Tk):
         self.ssv_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         ttk.Button(mid, text="Reload list", command=self.refresh_ssv_list).pack(side=tk.LEFT, padx=5)
         ttk.Button(mid, text="Load file", command=self.load_ssv_file).pack(side=tk.LEFT, padx=5)
+        ttk.Button(mid, text="Save file", command=self.save_ssv_file).pack(side=tk.LEFT, padx=5)
 
         # Table view
         table_frame = ttk.Frame(top)
@@ -602,20 +603,44 @@ class GaiaConfigUI(tk.Tk):
         vsb.grid(row=0, column=1, sticky="ns")
         table_frame.rowconfigure(0, weight=1)
         table_frame.columnconfigure(0, weight=1)
+        self.ssv_tree.bind("<Double-1>", self._begin_edit_cell)
 
         # Initialize list
         self.refresh_ssv_list()
+
+    def save_ssv_file(self):
+        """Write the current table back into the selected .ssv file."""
+        fname = self.ssv_combo_var.get()
+        if not fname:
+            messagebox.showwarning(".ssv Viewer", "No file selected.")
+            return
+
+        path = os.path.join(self.current_ssv_dir, fname)
+
+        # Extract table contents
+        rows = []
+        for row_id in self.ssv_tree.get_children():
+            values = self.ssv_tree.item(row_id, "values")
+            if values:
+                rows.append(" ".join(values))
+
+        text = "\n".join(rows) + "\n"
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+        except Exception as e:
+            messagebox.showerror(".ssv Viewer", f"Error saving to {path}:\n{e}")
+            return
+
+        self.status_var.set(f"Saved {fname} with {len(rows)} rows.")
+
 
     def refresh_ssv_list(self):
         """Refresh the dropdown list of SSV files and subdirectories."""
 
         base_dir = self.current_ssv_dir or SYSTEM_STATE_DIR
         base_dir = os.path.abspath(base_dir)
-
-        # Clamp to root so we don't wander off into the filesystem
-        root = os.path.abspath(SYSTEM_STATE_DIR)
-        if not os.path.commonpath([base_dir, root]).startswith(root):
-            base_dir = root
 
         if not os.path.isdir(base_dir):
             os.makedirs(base_dir, exist_ok=True)
@@ -655,19 +680,10 @@ class GaiaConfigUI(tk.Tk):
             f"Found {len(files)} .ssv files and {len(dirs)} dirs in {base_dir}/"
         )
     def ssv_go_up_dir(self):
-        """Go up one directory, but never above SYSTEM_STATE_DIR root."""
-        root = os.path.abspath(SYSTEM_STATE_DIR)
+        """Go up one directory."""
         cur = os.path.abspath(self.current_ssv_dir or SYSTEM_STATE_DIR)
 
-        # Already at or above root: clamp to root
-        if os.path.commonpath([cur, root]) != root:
-            cur = root
-
         parent = os.path.dirname(cur)
-
-        # Do not go above root
-        if os.path.commonpath([parent, root]) != root:
-            parent = root
 
         self.current_ssv_dir = parent
         self.refresh_ssv_list()
@@ -704,6 +720,49 @@ class GaiaConfigUI(tk.Tk):
 
         self.current_ssv_dir = new_path
         self.refresh_ssv_list()
+
+    def _begin_edit_cell(self, event):
+        """Start editing the clicked cell."""
+        region = self.ssv_tree.identify("region", event.x, event.y)
+        if region != "cell":
+            return
+
+        row_id = self.ssv_tree.identify_row(event.y)
+        col_id = self.ssv_tree.identify_column(event.x)
+        if not row_id or not col_id:
+            return
+
+        # Column index (c0, c1, etc.)
+        col_index = int(col_id.replace("#", "")) - 1
+        old_value = self.ssv_tree.item(row_id, "values")[col_index]
+
+        # Get the screen coords of the cell
+        x, y, width, height = self.ssv_tree.bbox(row_id, col_id)
+
+        # Create entry overlay
+        self._edit_var = tk.StringVar(value=old_value)
+        self._edit_entry = tk.Entry(self.ssv_tree, textvariable=self._edit_var)
+        self._edit_entry.place(x=x, y=y, width=width, height=height)
+
+        self._edit_entry.focus()
+        self._edit_entry.bind("<Return>", lambda e: self._finish_edit_cell(row_id, col_index))
+        self._edit_entry.bind("<Escape>", lambda e: self._cancel_edit_cell())
+        self._edit_entry.bind("<FocusOut>", lambda e: self._finish_edit_cell(row_id, col_index))
+
+    def _finish_edit_cell(self, row_id, col_index):
+        """User committed (or unfocused) cell edit."""
+        new_value = self._edit_var.get()
+        values = list(self.ssv_tree.item(row_id, "values"))
+        values[col_index] = new_value
+        self.ssv_tree.item(row_id, values=values)
+
+        self._cancel_edit_cell()
+
+    def _cancel_edit_cell(self):
+        """Remove editing widget."""
+        if hasattr(self, "_edit_entry") and self._edit_entry:
+            self._edit_entry.destroy()
+            self._edit_entry = None
 
 
     def load_ssv_file(self):
