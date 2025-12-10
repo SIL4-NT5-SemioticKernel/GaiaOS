@@ -741,6 +741,13 @@ public:
 			std::cout << "\n";
 		}
 	}
+	
+	
+	//Outputs the scaffold.
+	void log_Scaffold(std::ofstream * p_OFile)
+	{
+		
+	}
 
 	//Outputs the scaffold as character representing the address.
 	void output_Scaffold_Char()

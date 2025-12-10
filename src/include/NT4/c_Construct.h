@@ -666,6 +666,14 @@ public:
 	}
 
 
+	//==--- DIRECT_HOOK ---==//
+	//Outputs the scaffold as addresses.
+	void log_Scaffold(int p_Construct, std::ofstream * p_OFile)
+	{
+		Constructs[p_Construct]->CAN->log_Scaffold(p_OFile);
+	}
+
+
 	//==--- DIRECT_HOOK ---==//	
 	//==--- CLI_HOOK ---==//	
 	//    ---==  output_input [Construct_ID]  ==---

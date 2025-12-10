@@ -619,6 +619,14 @@ public:
 	{
 		Base.output_Scaffold(get_Construct_ID(p_Construct));
 	}
+	
+
+	//---==  log_Scaffold [Construct_ID] [Filename] ==---//
+	//Outputs the scaffold as addresses into a file.
+	void log_Scaffold(std::string p_Construct, std::ofstream * p_OFile)
+	{
+		Base.log_Scaffold(get_Construct_ID(p_Construct), p_OFile);
+	}
 
 
 	//---==  output_Input [Construct_ID]  ==---//

@@ -36,10 +36,10 @@ public:
         Raw_Depth = 0;
         Chrono_Current = 0;
 
-        MSC_APT = 0.95;
-        Chrono_APT = 0.95;
-        MSC_MC = 0.95;
-        Chrono_MC = 0.95;
+        MSC_APT = 0.0;
+        Chrono_APT = 0.0;
+        MSC_MC = 1.0;
+        Chrono_MC = 1.0;
     }
 
     void set_MSC_APT(double p_APT)
@@ -570,6 +570,64 @@ public:
         std::cout << "\n\n";
     }
 
+
+    void log_Raw_Scaffolds(int p_Index, std::string p_FName = "System_State_Files/scaffolds.ssv")
+    {
+		std::ofstream tmp_OFile(p_FName, std::ios::app);
+		
+		if (!(tmp_OFile.is_open()))
+		{
+			std::cout << "\n ERROR: Could not open log file, " << p_FName << ", in log_Raw_Scaffolds()";
+		}
+		else
+		{
+			NT4_Core.log_Scaffold(Raw_Name[p_Index], &tmp_OFile);
+		}
+		tmp_OFile.close();
+	}
+
+
+    void log_Scaffolds(std::string p_FName = "System_State_Files/scaffolds.ssv")
+    {
+		std::ofstream tmp_OFile(p_FName, std::ios::app);
+		
+        std::cout << "\n\n There are [" << Chrono_Depth << "] frames in the time series. Each frame has [" << Raw_Depth << "] raw tier constructs, one multi-sensory-construct (MSC), and one Chrono construct on top to handle the time series. This shows the most recent frame as it is the only one with a scaffold built.";
+        
+        std::cout << "\n\n";
+        std::cout << "\n _ __  ___   ____    _____    ____   ___  __ _";
+        std::cout << "\n _ __  ___   ____    _____    ____   ___  __ _";
+        std::cout << "\n _ __  ___   ____    _____    ____   ___  __ _";
+		std::cout.flush();
+		
+        tmp_OFile << "\n\n\n\n";
+        tmp_OFile << "\n\n";
+        for (int cou_Index = 0; cou_Index < Raw_Depth; cou_Index++)
+        {
+			
+            std::cout << "\n\n -Raw_Tier_Scaffold[" << cou_Index << "] in Chrono[0]";
+            std::cout << "\n\n Scaffold_as_adresses:";
+			std::cout.flush();
+			
+            tmp_OFile << "\n\n -Raw_Tier_Scaffold[" << cou_Index << "] in Chrono[0]";
+            tmp_OFile << "\n\n Scaffold_as_adresses:";
+            NT4_Core.log_Scaffold(Raw_Name[cou_Index], &tmp_OFile);
+            //tmp_OFile << "\n\n --- Scaffold as floats:";
+            //NT4_Core.output_Scaffold_Symbols_Float(Raw_Name[cou_Index], &tmp_OFile);
+            //std::cout << Raw_Name[cou_Index];
+        }
+
+        tmp_OFile << "\n\n - MSC Scaffold:";
+        std::cout << "\n\n - MSC Scaffold:";
+        NT4_Core.log_Scaffold("MSC", &tmp_OFile);
+
+        tmp_OFile << "\n\n - Chrono Scaffold: ";
+        std::cout << "\n\n - Chrono Scaffold: ";
+        NT4_Core.log_Scaffold("Chrono", &tmp_OFile);
+        tmp_OFile << "\n\n";
+		
+		tmp_OFile.close();
+    }
+
     void copy_Input(int p_RF)
     {
         //---validate_RF(p_RF);
@@ -632,7 +690,14 @@ public:
     {
         std::vector<uint64_t> tmp_Chron(Chrono_Depth);
         NT4_Core.set_Input_uint("Chrono", Chrono_Depth, tmp_Chron.data());
-
+		
+		std::ofstream tmp_OFile("./System_State_Files/scaffolds.ssv", std::ios::app);
+		if (!tmp_OFile.is_open())
+		{
+			std::cout << "\nERROR: Could not open file ./System_State_Files/scaffolds.ssv in query_Arrays()";
+		}
+		//
+		
         //---std::cout << "\n\n\n query_Array()"; std::cout.flush();
         //---std::cout << "\n Chrono_Depth: " << Chrono_Depth; std::cout.flush();
         for (int cou_Step = 0; cou_Step < Chrono_Depth; cou_Step++)
@@ -649,6 +714,7 @@ public:
             //[0] is the newest so we read the chrono in the same way it appears, oldest to newest.
             for (int cou_Chrono = 0; cou_Chrono < (Chrono_Depth - 1); cou_Chrono++)
             {
+				tmp_OFile << "\n.\n.\n. Chrono_Tick[" << cou_Chrono << "]";
                 //---std::cout << "\n -+- -+- Chrono[" << cou_Chrono << "]"; std::cout.flush();
                 for (int cou_Index = 0; cou_Index < Raw_Depth; cou_Index++)
                 {
@@ -669,7 +735,11 @@ public:
 
                     NT4_Core.set_Input_uint(Raw_Name[cou_Index], 1, &(tmp_Bit.U));
                     NT4_Core.check_Symbol(Raw_Name[cou_Index]);
+					
+					tmp_OFile << "\n.\nRaw[" << cou_Index << "] Scaffold:";
+					log_Raw_Scaffolds(cou_Index);
                 }
+
 
                 NT4_Core.reset_Output("MSC");
                 NT4_Core.gather_Treetops("MSC");
@@ -679,12 +749,18 @@ public:
                 NT4_Core.query_Spacial("MSC");
                 //---std::cout << "\n MSC Scaffold: ";
                 //---NT4_Core.output_Scaffold("MSC");
+				tmp_OFile << "\n.\nMSC Scaffold:";
+				NT4_Core.log_Scaffold("MSC", &tmp_OFile);
                 NT4_Core.gather_Treetops("MSC");
                 //---std::cout << "\n MSC Output_uint: ";
                 //---NT4_Core.output_Output_uint("MSC");
+				
 
                 NT4_Core.pull_From_Lower_Connections("Chrono");
                 NT4_Core.query_Given_Index("Chrono", cou_Chrono);
+				
+				tmp_OFile << "\n.\nChrono Scaffold:";
+				NT4_Core.log_Scaffold("Chrono", &tmp_OFile);
                 //---std::cout << "\n Chrono[" << cou_Chrono << "]: ";
                 //---NT4_Core.output_Input_uint("Chrono");
                 //---NT4_Core.output_Scaffold("Chrono");
@@ -703,6 +779,7 @@ public:
         //---output_Bulk(p_RF);
 
         move_Interm_To_Output(p_RF);
+		tmp_OFile.close();
     }
 
     void drawdown_Arrays(int p_RF)

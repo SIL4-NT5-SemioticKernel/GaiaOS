@@ -8,13 +8,15 @@ from tkinter import ttk, messagebox
 # Basic paths – tweak these to match your world
 # ---------------------------------------------------------------------------
 
+SYSTEM_STATE_DIR     = "System_State_Files"
 PINOUT_FILE          = "pinout.cfg"
 CONTROL_PANEL_FILE   = "Control_Panel.ssv"
 CONTROL_PANEL_FLAG   = "Control_Panel_Flag.ssv"   # engine watches this
+UPDATE_FLAG_FILE     = "Update_Flag.ssv"   # engine watches this
 
 STATUS_FILE          = os.path.join("System_State_Files", "status.ssv")
 ONION_SNAPSHOT_FILE  = os.path.join("System_State_Files", "onion.ssv")
-UPDATE_SCRIPT_FILE   = os.path.join("Scripts", "update.txt")
+SCRIPTS_DIR          = "./scripts"
 AUTOEXEC_FILE        = "autoexec.ssv"
 
 # legacy files still used by engine; plotting is now driven via Skelly_Panels.ssv
@@ -32,6 +34,7 @@ AFFERENT_LOG_FILE  = os.path.join("System_State_Files", "afferent_log.ssv")
 EFFERENT_LOG_FILE  = os.path.join("System_State_Files", "efferent_log.ssv")
 
 SKELLY_PANELS_FILE = "Skelly_Panels.ssv"   # routing table for Under-The-Hood plots
+
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -478,11 +481,29 @@ class GaiaConfigUI(tk.Tk):
 
         # track engine tick delta on summary tab
         self._last_session_tick  = None
-
+        
+        # --- .ssv browser state ---
+        self.current_ssv_dir = SYSTEM_STATE_DIR
+        self.ssv_dir_label_var = tk.StringVar(
+            value=f"Directory: {os.path.abspath(self.current_ssv_dir)}"
+        )
+        
         # panel defs for Under-The-Hood
         self.panel_defs          = load_panel_defs(SKELLY_PANELS_FILE)
         self.panel_defs_by_label = {p.label: p for p in self.panel_defs}
         self.underhood_panel_var = tk.StringVar(value=self.panel_defs[0].label if self.panel_defs else "")
+        
+        # --- scripts tab state ---
+        self.current_script_path = None
+        self.scripts_combo_var   = tk.StringVar()
+        # scripts_text will be created in _build_scripts_tab
+        
+        # --- I/O edit state (for the I/O form we'll add later) ---
+        self.io_selected_path     = None
+        self.io_selected_mode_var = tk.StringVar()
+        self.io_selected_desc_var = tk.StringVar()
+        self.io_selected_file_var = tk.StringVar()
+        self.io_value_var         = tk.StringVar()
 
         # max points after downsampling for plots
         self.max_points          = 1000
@@ -500,29 +521,32 @@ class GaiaConfigUI(tk.Tk):
 
         self.summary_frame    = ttk.Frame(self.nb)
         self.io_frame         = ttk.Frame(self.nb)
+        self.ssv_frame        = ttk.Frame(self.nb)
         self.ctrl_frame       = ttk.Frame(self.nb)
         self.autoexec_frame   = ttk.Frame(self.nb)
         self.onion_frame      = ttk.Frame(self.nb)
-        self.update_frame     = ttk.Frame(self.nb)
+        self.scripts_frame    = ttk.Frame(self.nb)   # NEW
         self.status_frame     = ttk.Frame(self.nb)
         self.underhood_frame  = ttk.Frame(self.nb)
 
         # Order: put Status/Goals first as the friendly front tab
         self.nb.add(self.summary_frame,   text="Status / Goals")
         self.nb.add(self.io_frame,        text="I/O State")
+        self.nb.add(self.ssv_frame,       text="SSV Files")
+        self.nb.add(self.scripts_frame,   text="Scripts")       # NEW
+        self.nb.add(self.underhood_frame, text="Under The Hood")
         self.nb.add(self.ctrl_frame,      text="Control Panel")
         self.nb.add(self.autoexec_frame,  text="Autoexec")
         self.nb.add(self.onion_frame,     text="Onion Snapshot")
-        self.nb.add(self.update_frame,    text="Update Script")
         self.nb.add(self.status_frame,    text="System Status")
-        self.nb.add(self.underhood_frame, text="Under The Hood")
 
         self._build_summary_tab()
         self._build_io_tab()
+        self._build_ssv_tab()
         self._build_ctrl_tab()
         self._build_autoexec_tab()
         self._build_onion_tab()
-        self._build_update_tab()
+        self._build_scripts_tab()     # NEW
         self._build_status_tab()
         self._build_underhood_tab()
 
@@ -530,7 +554,351 @@ class GaiaConfigUI(tk.Tk):
         status = ttk.Label(self, textvariable=self.status_var, anchor="w")
         status.pack(fill=tk.X, side=tk.BOTTOM)
 
-    # --- Summary / Goals tab ----------------------------------------------
+    # --- SSV Files tab -------------------------------------------------------
+
+    def _build_ssv_tab(self):
+        top = ttk.Frame(self.ssv_frame)
+        top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Header row with directory + nav + delete
+        hdr = ttk.Frame(top)
+        hdr.pack(fill=tk.X, pady=3)
+
+        ttk.Label(hdr, textvariable=self.ssv_dir_label_var).pack(
+            side=tk.LEFT, padx=(5, 10)
+        )
+
+        ttk.Button(hdr, text="Up", command=self.ssv_go_up_dir).pack(
+            side=tk.LEFT, padx=5
+        )
+
+        ttk.Button(hdr, text="Enter dir", command=self.ssv_enter_dir).pack(
+            side=tk.LEFT, padx=5
+        )
+
+        ttk.Button(hdr, text="[DELETE_ALL]", command=self.delete_all_ssv).pack(
+            side=tk.RIGHT, padx=10
+        )
+
+
+
+        # File selector
+        mid = ttk.Frame(top)
+        mid.pack(fill=tk.X, pady=3)
+        ttk.Label(mid, text="Select file:").pack(side=tk.LEFT, padx=(5, 2))
+        self.ssv_combo_var = tk.StringVar()
+        self.ssv_combo = ttk.Combobox(mid, textvariable=self.ssv_combo_var, state="readonly", width=50)
+        self.ssv_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        ttk.Button(mid, text="Reload list", command=self.refresh_ssv_list).pack(side=tk.LEFT, padx=5)
+        ttk.Button(mid, text="Load file", command=self.load_ssv_file).pack(side=tk.LEFT, padx=5)
+
+        # Table view
+        table_frame = ttk.Frame(top)
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.ssv_tree = ttk.Treeview(table_frame, show="headings")
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.ssv_tree.yview)
+        self.ssv_tree.configure(yscrollcommand=vsb.set)
+        self.ssv_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        table_frame.rowconfigure(0, weight=1)
+        table_frame.columnconfigure(0, weight=1)
+
+        # Initialize list
+        self.refresh_ssv_list()
+
+    def refresh_ssv_list(self):
+        """Refresh the dropdown list of SSV files and subdirectories."""
+
+        base_dir = self.current_ssv_dir or SYSTEM_STATE_DIR
+        base_dir = os.path.abspath(base_dir)
+
+        # Clamp to root so we don't wander off into the filesystem
+        root = os.path.abspath(SYSTEM_STATE_DIR)
+        if not os.path.commonpath([base_dir, root]).startswith(root):
+            base_dir = root
+
+        if not os.path.isdir(base_dir):
+            os.makedirs(base_dir, exist_ok=True)
+
+        # Update label
+        self.current_ssv_dir = base_dir
+        self.ssv_dir_label_var.set(f"Directory: {base_dir}")
+
+        names = os.listdir(base_dir)
+
+        dirs = [
+            name + "/"
+            for name in names
+            if os.path.isdir(os.path.join(base_dir, name))
+        ]
+        files = [
+            name
+            for name in names
+            if name.endswith(".ssv")
+            and os.path.isfile(os.path.join(base_dir, name))
+        ]
+
+        values = sorted(dirs) + sorted(files)
+
+        self.ssv_combo["values"] = values
+        if values:
+            # Keep selection if possible
+            cur = self.ssv_combo_var.get()
+            if cur in values:
+                self.ssv_combo_var.set(cur)
+            else:
+                self.ssv_combo_var.set(values[0])
+        else:
+            self.ssv_combo_var.set("")
+
+        self.status_var.set(
+            f"Found {len(files)} .ssv files and {len(dirs)} dirs in {base_dir}/"
+        )
+    def ssv_go_up_dir(self):
+        """Go up one directory, but never above SYSTEM_STATE_DIR root."""
+        root = os.path.abspath(SYSTEM_STATE_DIR)
+        cur = os.path.abspath(self.current_ssv_dir or SYSTEM_STATE_DIR)
+
+        # Already at or above root: clamp to root
+        if os.path.commonpath([cur, root]) != root:
+            cur = root
+
+        parent = os.path.dirname(cur)
+
+        # Do not go above root
+        if os.path.commonpath([parent, root]) != root:
+            parent = root
+
+        self.current_ssv_dir = parent
+        self.refresh_ssv_list()
+
+    def ssv_enter_dir(self):
+        """
+        If the selected combo item is a directory (shown as 'name/'),
+        descend into it.
+        """
+        base_dir = self.current_ssv_dir or SYSTEM_STATE_DIR
+        base_dir = os.path.abspath(base_dir)
+
+        sel = self.ssv_combo_var.get()
+        if not sel:
+            messagebox.showwarning(".ssv Viewer", "No directory selected.")
+            return
+
+        if not sel.endswith("/"):
+            messagebox.showwarning(
+                ".ssv Viewer",
+                "Selected item is not a directory (it doesn't end with '/').",
+            )
+            return
+
+        dirname = sel.rstrip("/")
+        new_path = os.path.join(base_dir, dirname)
+
+        if not os.path.isdir(new_path):
+            messagebox.showerror(
+                ".ssv Viewer",
+                f"Directory no longer exists:\n{new_path}"
+            )
+            return
+
+        self.current_ssv_dir = new_path
+        self.refresh_ssv_list()
+
+
+    def load_ssv_file(self):
+        """Load the selected .ssv file into the table view."""
+        fname = self.ssv_combo_var.get()
+        if not fname:
+            messagebox.showwarning(".ssv Viewer", "No file selected.")
+            return
+
+        fname = self.ssv_combo_var.get()
+        if not fname:
+            messagebox.showwarning(".ssv Viewer", "No file selected.")
+            return
+
+        if fname.endswith("/"):
+            messagebox.showwarning(
+                ".ssv Viewer",
+                "Selected item is a directory. Use 'Enter dir' instead."
+            )
+            return
+
+        base_dir = self.current_ssv_dir or SYSTEM_STATE_DIR
+        path = os.path.join(base_dir, fname)
+
+        if not os.path.isfile(path):
+            messagebox.showerror(".ssv Viewer", f"File not found: {path}")
+            return
+
+        # Read rows
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                lines = [l.strip() for l in f if l.strip() and not l.strip().startswith("#")]
+        except Exception as e:
+            messagebox.showerror(".ssv Viewer", f"Error reading {path}:\n{e}")
+            return
+
+        rows = [line.split() for line in lines]
+        if not rows:
+            messagebox.showinfo(".ssv Viewer", f"No data rows in {path}.")
+            return
+
+        num_cols = max(len(r) for r in rows)
+        cols = [f"c{i}" for i in range(num_cols)]
+        self.ssv_tree["columns"] = cols
+        for c in cols:
+            self.ssv_tree.heading(c, text=c)
+            self.ssv_tree.column(c, width=100, anchor="w", stretch=True)
+
+        self.ssv_tree.delete(*self.ssv_tree.get_children())
+        for r in rows:
+            self.ssv_tree.insert("", tk.END, values=r)
+
+        self.status_var.set(f"Loaded {fname} with {len(rows)} rows.")
+
+    def delete_all_ssv(self):
+        """Delete all .ssv files in the current directory."""
+        base_dir = os.path.abspath(self.current_ssv_dir or SYSTEM_STATE_DIR)
+
+        if not messagebox.askyesno(
+            ".ssv Viewer",
+            f"Delete ALL .ssv files in this directory?\n\n{base_dir}"
+        ):
+            return
+
+        deleted = 0
+        if os.path.isdir(base_dir):
+            for name in os.listdir(base_dir):
+                if name.endswith(".ssv"):
+                    try:
+                        os.remove(os.path.join(base_dir, name))
+                        deleted += 1
+                    except Exception:
+                        pass
+
+        self.refresh_ssv_list()
+        self.ssv_tree.delete(*self.ssv_tree.get_children())
+        self.status_var.set(
+            f"Deleted {deleted} .ssv files from {base_dir}/"
+        )
+
+
+
+    # --- Scripts tab -------------------------------------------------------
+
+    def _build_scripts_tab(self):
+        top = ttk.Frame(self.scripts_frame)
+        top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Top row: directory + combobox + buttons
+        hdr = ttk.Frame(top)
+        hdr.pack(fill=tk.X, pady=(0, 5))
+
+        ttk.Label(hdr, text=f"Scripts directory: {SCRIPTS_DIR}").pack(side=tk.LEFT)
+
+        ttk.Label(hdr, text="Script:").pack(side=tk.LEFT, padx=(15, 2))
+
+        self.scripts_combo = ttk.Combobox(
+            hdr,
+            textvariable=self.scripts_combo_var,
+            state="readonly",
+            width=40,
+            values=self._get_script_list(),
+        )
+        self.scripts_combo.pack(side=tk.LEFT, padx=2)
+        self.scripts_combo.bind("<<ComboboxSelected>>", self.on_script_selected)
+
+        ttk.Button(hdr, text="Rescan", command=self.rescan_scripts).pack(
+            side=tk.LEFT, padx=5
+        )
+        ttk.Button(hdr, text="Reload", command=self.load_current_script).pack(
+            side=tk.LEFT, padx=5
+        )
+        ttk.Button(hdr, text="Save", command=self.save_current_script).pack(
+            side=tk.LEFT, padx=5
+        )
+
+        # Main text editor
+        text_frame = ttk.Frame(top)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.scripts_text = tk.Text(text_frame, wrap="none", undo=True)
+        vsb = ttk.Scrollbar(text_frame, orient="vertical",
+                            command=self.scripts_text.yview)
+        self.scripts_text.configure(yscrollcommand=vsb.set)
+
+        self.scripts_text.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+
+        text_frame.rowconfigure(0, weight=1)
+        text_frame.columnconfigure(0, weight=1)
+
+        # Try to pick a default script on startup
+        scripts = self._get_script_list()
+        if scripts:
+            self.scripts_combo["values"] = scripts
+            self.scripts_combo_var.set(scripts[0])
+            self.on_script_selected()
+
+    def _get_script_list(self):
+        """Return sorted list of regular files in SCRIPTS_DIR."""
+        if not os.path.isdir(SCRIPTS_DIR):
+            return []
+        try:
+            names = []
+            for name in os.listdir(SCRIPTS_DIR):
+                full = os.path.join(SCRIPTS_DIR, name)
+                if os.path.isfile(full):
+                    names.append(name)
+            names.sort()
+            return names
+        except Exception:
+            return []
+
+    def rescan_scripts(self):
+        scripts = self._get_script_list()
+        self.scripts_combo["values"] = scripts
+        if scripts and self.scripts_combo_var.get() not in scripts:
+            # reset to first if previous selection vanished
+            self.scripts_combo_var.set(scripts[0])
+            self.on_script_selected()
+        self.status_var.set(f"Scripts list refreshed ({len(scripts)} files).")
+
+    def on_script_selected(self, event=None):
+        name = self.scripts_combo_var.get()
+        if not name:
+            self.current_script_path = None
+            self.scripts_text.delete("1.0", tk.END)
+            self.status_var.set("No script selected.")
+            return
+
+        self.current_script_path = os.path.join(SCRIPTS_DIR, name)
+        self.load_current_script()
+
+    def load_current_script(self):
+        if not self.current_script_path:
+            self.status_var.set("No script selected to load.")
+            return
+
+        text = read_whole_file(self.current_script_path)
+        self.scripts_text.delete("1.0", tk.END)
+        self.scripts_text.insert("1.0", text)
+        self.status_var.set(f"Loaded script {self.current_script_path!r}.")
+
+    def save_current_script(self):
+        if not self.current_script_path:
+            messagebox.showwarning("Scripts", "No script selected to save.")
+            return
+
+        text = self.scripts_text.get("1.0", tk.END)
+        try:
+            write_whole_file(self.current_script_path, text)
+            self.status_var.set(f"Saved script {self.current_script_path!r}.")
+        except Exception as e:
+            messagebox.showerror("Scripts", f"Failed to save script:\n{e}")
+
 
     def _build_summary_tab(self):
         top = ttk.Frame(self.summary_frame)
@@ -740,6 +1108,69 @@ class GaiaConfigUI(tk.Tk):
         self.after(1000, self._schedule_summary_refresh)
 
     # --- I/O tab -----------------------------------------------------------
+    def _get_selected_io_path(self):
+        """Return the file path for the currently selected I/O row, or None."""
+        sel = self.io_tree.selection()
+        if not sel:
+            return None
+
+        item_id = sel[0]
+        values = self.io_tree.item(item_id, "values")
+        # columns are ("mode", "desc", "path", "value")
+        if len(values) < 3:
+            return None
+
+        path = values[2]
+        if path in ("", "(?)"):
+            return None
+        return path
+
+    def bump_selected_io(self, delta: float):
+        """
+        Increment or decrement the numeric value for the selected I/O's file.
+
+        delta = +1 for "++" button, -1 for "--".
+        """
+        path = self._get_selected_io_path()
+        if not path:
+            messagebox.showwarning(
+                "I/O",
+                "No I/O row selected, or selected entry has no associated file.",
+            )
+            return
+
+        raw = read_first_line(path)
+        # Try to interpret as int or float; default to 0 if nonsense.
+        is_int = False
+        try:
+            if raw == "":
+                val = 0
+                is_int = True
+            elif "." in raw or "e" in raw.lower():
+                val = float(raw)
+            else:
+                val = int(raw)
+                is_int = True
+        except Exception:
+            val = 0
+            is_int = True
+
+        new_val = val + delta
+        if is_int:
+            text = f"{int(new_val)}\n"
+        else:
+            text = f"{new_val}\n"
+
+        try:
+            write_whole_file(path, text)
+            self.status_var.set(f"Set I/O file {path!r} to {text.strip()!r}.")
+            self.refresh_io()
+        except Exception as e:
+            messagebox.showerror(
+                "I/O",
+                f"Failed to write new value to {path!r}:\n{e}",
+            )
+
 
     def _build_io_tab(self):
         top = ttk.Frame(self.io_frame)
@@ -761,10 +1192,25 @@ class GaiaConfigUI(tk.Tk):
         top.rowconfigure(0, weight=1)
         top.columnconfigure(0, weight=1)
 
+        # When a row is selected, populate the edit form
+        self.io_tree.bind("<<TreeviewSelect>>", self.on_io_row_selected)
+
         btn_frame = ttk.Frame(self.io_frame)
         btn_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Button(btn_frame, text="Refresh", command=self.refresh_io).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="Refresh",
+                   command=self.refresh_io).pack(side=tk.LEFT)
+
+        # Adjust the selected I/O value by -1 / +1
+        ttk.Button(btn_frame, text="--",
+                   command=lambda: self.bump_selected_io(-1)).pack(side=tk.LEFT, padx=5)
+
+        ttk.Button(btn_frame, text="++",
+                   command=lambda: self.bump_selected_io(+1)).pack(side=tk.LEFT, padx=5)
+
+        # Write "1" into Update_Flag.ssv so the engine can react
+        ttk.Button(btn_frame, text="Trigger Update",
+                   command=self.trigger_update_flag).pack(side=tk.LEFT, padx=15)
 
         io_auto_chk = ttk.Checkbutton(
             btn_frame,
@@ -773,6 +1219,47 @@ class GaiaConfigUI(tk.Tk):
             command=self.on_io_auto_toggle,
         )
         io_auto_chk.pack(side=tk.LEFT, padx=10)
+
+
+        # --- Detail/edit form for a selected I/O entry ---------------------
+        form = ttk.LabelFrame(self.io_frame, text="Selected I/O")
+        form.pack(fill=tk.X, padx=5, pady=(0, 5))
+
+        row = 0
+        ttk.Label(form, text="Mode:").grid(row=row, column=0, sticky="e", padx=5, pady=2)
+        ttk.Label(form, textvariable=self.io_selected_mode_var).grid(
+            row=row, column=1, sticky="w", padx=5, pady=2
+        )
+
+        row += 1
+        ttk.Label(form, text="Description:").grid(
+            row=row, column=0, sticky="e", padx=5, pady=2
+        )
+        ttk.Label(form, textvariable=self.io_selected_desc_var, width=60).grid(
+            row=row, column=1, columnspan=3, sticky="w", padx=5, pady=2
+        )
+
+        row += 1
+        ttk.Label(form, text="File:").grid(row=row, column=0, sticky="e", padx=5, pady=2)
+        ttk.Label(form, textvariable=self.io_selected_file_var, width=60).grid(
+            row=row, column=1, columnspan=3, sticky="w", padx=5, pady=2
+        )
+
+        row += 1
+        ttk.Label(form, text="Value:").grid(row=row, column=0, sticky="e", padx=5, pady=2)
+        self.io_value_entry = ttk.Entry(form, textvariable=self.io_value_var, width=30)
+        self.io_value_entry.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+
+        ttk.Button(form, text="Reload value", command=self.reload_io_value).grid(
+            row=row, column=2, sticky="w", padx=5, pady=2
+        )
+        ttk.Button(form, text="Save value", command=self.save_io_value).grid(
+            row=row, column=3, sticky="w", padx=5, pady=2
+        )
+
+        for c in range(4):
+            form.columnconfigure(c, weight=0)
+
 
     def _parse_pinout(self):
         entries = []
@@ -823,19 +1310,49 @@ class GaiaConfigUI(tk.Tk):
         except FileNotFoundError:
             pass
         return entries
-
+        
     def refresh_io(self):
+        # Remember which path is currently selected (if any)
+        try:
+            selected_path = self._get_selected_io_path()
+        except AttributeError:
+            # If _get_selected_io_path doesn't exist yet for some reason,
+            # just fall back to no remembered selection.
+            selected_path = None
+
         self.io_tree.delete(*self.io_tree.get_children())
         entries = self._parse_pinout()
+
+        selected_item = None
+
         for ent in entries:
             val = ""
             if ent["path"] not in ("", "(?)"):
                 val = read_first_line(ent["path"])
-            self.io_tree.insert(
-                "", tk.END,
-                values=(ent["mode"], ent["desc"], ent["path"], val)
+
+            item_id = self.io_tree.insert(
+                "",
+                tk.END,
+                values=(ent["mode"], ent["desc"], ent["path"], val),
             )
-        self.status_var.set(f"Loaded {len(entries)} I/O entries from {PINOUT_FILE!r}.")
+
+            # If this row has the same path as the previously selected row,
+            # remember its new item id so we can reselect it.
+            if selected_path and ent["path"] == selected_path:
+                selected_item = item_id
+
+        # Reselect the same row (by path) if we found it again
+        if selected_item is not None:
+            self.io_tree.selection_set(selected_item)
+            self.io_tree.focus(selected_item)
+            self.io_tree.see(selected_item)
+            # Update the details form so the value field stays in sync
+            if hasattr(self, "on_io_row_selected"):
+                self.on_io_row_selected()
+
+        self.status_var.set(
+            f"Loaded {len(entries)} I/O entries from {PINOUT_FILE!r}."
+        )
 
     def on_io_auto_toggle(self):
         if self.io_auto_var.get():
@@ -846,6 +1363,62 @@ class GaiaConfigUI(tk.Tk):
             return
         self.refresh_io()
         self.after(1000, self._schedule_io_refresh)
+
+
+    def on_io_row_selected(self, event=None):
+        """When the user selects a row in the I/O tree, populate the edit form."""
+        sel = self.io_tree.selection()
+        if not sel:
+            self.io_selected_path = None
+            self.io_selected_mode_var.set("")
+            self.io_selected_desc_var.set("")
+            self.io_selected_file_var.set("")
+            self.io_value_var.set("")
+            return
+
+        item_id = sel[0]
+        values = self.io_tree.item(item_id, "values")
+        if len(values) != 4:
+            return
+
+        mode, desc, path, value = values
+        self.io_selected_path = path if path not in ("", "(?)") else None
+
+        self.io_selected_mode_var.set(mode)
+        self.io_selected_desc_var.set(desc)
+        self.io_selected_file_var.set(path)
+        self.io_value_var.set(value)
+
+    def reload_io_value(self):
+        """Re-read the current value from the backing file for the selected I/O."""
+        if not self.io_selected_path:
+            messagebox.showwarning("I/O", "Selected entry has no file to reload.")
+            return
+
+        val = read_first_line(self.io_selected_path)
+        self.io_value_var.set(val)
+        self.status_var.set(
+            f"Reloaded I/O value from {self.io_selected_path!r}."
+        )
+
+    def save_io_value(self):
+        """Write the edited value back to the backing file (first line)."""
+        if not self.io_selected_path:
+            messagebox.showwarning("I/O", "Selected entry has no file to save to.")
+            return
+
+        val = self.io_value_var.get()
+        try:
+            # Replace the file with a single line containing the new value
+            write_whole_file(self.io_selected_path, str(val) + "\n")
+            self.status_var.set(
+                f"Saved I/O value to {self.io_selected_path!r}."
+            )
+            # Refresh the tree so the row shows the new value
+            self.refresh_io()
+        except Exception as e:
+            messagebox.showerror("I/O", f"Failed to save I/O value:\n{e}")
+
 
     # --- Control Panel tab -------------------------------------------------
 
@@ -890,6 +1463,11 @@ class GaiaConfigUI(tk.Tk):
         text = self.ctrl_text.get("1.0", tk.END)
         write_whole_file(CONTROL_PANEL_FILE, text)
         self.status_var.set(f"Saved {CONTROL_PANEL_FILE!r}.")
+        
+    def trigger_update_flag(self):
+        """Write '1' into Update_Flag.ssv so the engine can pick it up."""
+        if touch_flag(UPDATE_FLAG_FILE, "1\n"):
+            self.status_var.set(f"Set update flag {UPDATE_FLAG_FILE!r}.")
 
     def trigger_control_flag(self):
         if touch_flag(CONTROL_PANEL_FLAG, "1\n"):
@@ -978,45 +1556,6 @@ class GaiaConfigUI(tk.Tk):
         self.onion_text.delete("1.0", tk.END)
         self.onion_text.insert("1.0", text)
         self.status_var.set(f"Loaded {ONION_SNAPSHOT_FILE!r}.")
-
-    # --- Update Script tab -------------------------------------------------
-
-    def _build_update_tab(self):
-        top = ttk.Frame(self.update_frame)
-        top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        ttk.Label(top, text=f"Update script (agent main): {UPDATE_SCRIPT_FILE}").pack(anchor="w")
-
-        text_frame = ttk.Frame(top)
-        text_frame.pack(fill=tk.BOTH, expand=True)
-
-        self.update_text = tk.Text(text_frame, wrap="none", undo=True)
-        vsb = ttk.Scrollbar(text_frame, orient="vertical",
-                            command=self.update_text.yview)
-        self.update_text.configure(yscrollcommand=vsb.set)
-
-        self.update_text.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-
-        text_frame.rowconfigure(0, weight=1)
-        text_frame.columnconfigure(0, weight=1)
-
-        btn_frame = ttk.Frame(top)
-        btn_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Button(btn_frame, text="Reload", command=self.load_update_script).pack(side=tk.LEFT)
-        ttk.Button(btn_frame, text="Save",   command=self.save_update_script).pack(side=tk.LEFT, padx=5)
-
-    def load_update_script(self):
-        text = read_whole_file(UPDATE_SCRIPT_FILE)
-        self.update_text.delete("1.0", tk.END)
-        self.update_text.insert("1.0", text)
-        self.status_var.set(f"Loaded {UPDATE_SCRIPT_FILE!r}.")
-
-    def save_update_script(self):
-        text = self.update_text.get("1.0", tk.END)
-        write_whole_file(UPDATE_SCRIPT_FILE, text)
-        self.status_var.set(f"Saved {UPDATE_SCRIPT_FILE!r}.")
 
     # --- System Status tab -------------------------------------------------
 
@@ -1334,7 +1873,6 @@ class GaiaConfigUI(tk.Tk):
         self.load_control_panel()
         self.load_autoexec()
         self.load_onion_snapshot()
-        self.load_update_script()
         self.refresh_status()
         # Under-The-Hood: only draw once; auto-refresh can take over
         self.refresh_underhood()

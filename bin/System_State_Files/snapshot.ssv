@@ -1,0 +1,9 @@
+
+Current_Gathered_Afferent_Input 0 0 0 1 0 2 0
+Current_Gathered_Efferent_Input [0][0] 0 [1][0] 4261281277 [2][0] 0
+
+Afferent_Index [0]
+get_Value_Granulated [0] -0 [1] -0 [2] -0 [3] -1 [4] -1
+get_Value_Deltat [0] 0 [1] 0 [2] 0 [3] -1 [4] 1
+get_Value_Data [0] 25 [1] 25 [2] 25 [3] 22 [4] 23
+Current_Deviation_Set [0] 0 [1] 0 [2] 0 [3] 1 [4] 1

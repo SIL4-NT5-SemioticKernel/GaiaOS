@@ -308,5 +308,25 @@ public:
 			}
         }
     }
+
+    //Outputs the data
+    void write()
+    {
+        for (int cou_Index = 0; cou_Index < Depth; cou_Index++)
+        {
+			if (Type == 0)
+			{
+				std::cout << "\n[" << cou_Index << "] Data: " << Data[cou_Index].get_double();
+				std::cout << " Granulated: " << Granulated[cou_Index].get_double(); 
+				std::cout << " << Delta: " << Delta[cou_Index].get_double();
+				std::cout << " << Deviation: " << Deviation[cou_Index];
+			}
+			if (Type == 1)
+			{
+				std::cout << "\n[" << cou_Index << "] Data: " << Data[cou_Index].get_double();
+				std::cout << " << Delta: " << Delta[cou_Index].get_double();
+			}
+        }
+    }
 };
 

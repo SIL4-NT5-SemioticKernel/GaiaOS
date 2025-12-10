@@ -1,3 +1,9 @@
+//So:
+//This is an exploratory build, not to be part of the safety build. This is being rewritten for embedded hardware during the left v-leg of a certifiable build. This is to be used on systems that don't require certification, R&D is the expected main use case.
+
+//Naming changes planned:
+//GaiaOS is going to be changed, to what is still in debate, but GaiaOS already exists as a business.
+//Homeostsis module will be changed to goal_seeker_module
 
 
 class c_Homeostasis_IO_Module
@@ -314,6 +320,63 @@ public:
             std::cout << " {[" << cou_Index << "] " << Gathered_Efferent[cou_Index] << " } ";
         }
     }
+	
+	void write_State(std::ofstream * p_File)
+	{
+		if (!p_File->is_open())
+		{
+			std::cout << "\n ERROR: The c_Homeostasis_IO_Module write_State function was passed an unoped handle...";
+		}
+		
+		//The gathered afferent/efferent
+		*p_File << "\nCurrent_Gathered_Afferent_Input";
+        for (int cou_Index = 0; cou_Index < Afferent_Count; cou_Index++)
+        {
+			*p_File << " " << cou_Index;
+            *p_File << " 0 " << Gathered_Afferent[0][cou_Index];
+            *p_File << " 1 " << Gathered_Afferent[1][cou_Index];
+            *p_File << " 2 " << Gathered_Afferent[2][cou_Index];
+        }
+        *p_File << "\nCurrent_Gathered_Efferent_Input";
+        for (int cou_Index = 0; cou_Index < Efferent_Count; cou_Index++)
+        {
+            *p_File << " [" << cou_Index << "][0] " << Gathered_Efferent[cou_Index];
+		}
+		
+		
+        for (int cou_Index = 0; cou_Index < Afferent_Count; cou_Index++)
+        {
+			*p_File << "\n\nAfferent_Index [" << cou_Index << "]";
+			
+			*p_File << "\nget_Value_Granulated";
+		
+			for (int cou_L=0;cou_L<Afferent[cou_Index]->Depth;cou_L++)
+			{
+				*p_File << " [" << cou_L << "] " << Afferent[cou_Index]->get_Value_Granulated(cou_L);
+			}
+		
+			*p_File << "\nget_Value_Deltat";
+		
+			for (int cou_L=0;cou_L<Afferent[cou_Index]->Depth;cou_L++)
+			{
+				*p_File << " [" << cou_L << "] " << Afferent[cou_Index]->get_Value_Delta(cou_L);
+			}
+		
+			*p_File << "\nget_Value_Data";
+		
+			for (int cou_L=0;cou_L<Afferent[cou_Index]->Depth;cou_L++)
+			{
+				*p_File << " [" << cou_L << "] " << Afferent[cou_Index]->get_Value_Data(cou_L);
+			}
+			
+			*p_File << "\nCurrent_Deviation_Set";
+		
+			for (int cou_L=0;cou_L<Afferent[cou_Index]->Depth;cou_L++)
+			{
+				*p_File << " [" << cou_L << "] " << Afferent[cou_Index]->Deviation[cou_L];
+			}
+		}
+	}
 };
 
 
@@ -344,6 +407,169 @@ public:
 
 
 
+//ChatGPT generated struct
+//ChatGPT wrote this, I'm not going to bother fixing the internals. It can stay ugly.
+struct TraceSelectionConfig
+{
+    // How much each component contributes to the composite score [0]
+    float weight_SA   = 1.0f;   // Start Anchor
+    float weight_DM   = 1.0f;   // Direction Match
+    float weight_RC   = 1.0f;   // RC
+    float weight_Chrg = 1.0f;   // Charge
+
+    // How you normalize the raw sums into "score space"
+    float norm_SA_scale   = 100.0f;  // originally *100
+    float norm_DM_scale   = 100.0f;  // originally *100
+    float norm_RC_scale   = 10.0f;   // originally *10
+    float norm_Chrg_scale = 10.0f;   // originally *10
+
+    // Minimal criteria for “valid trace”
+    int   min_start_anchor_percent = 0;   // min normalized SA to consider
+    int   min_direction_percent    = 0;   // min normalized DM to consider
+
+    // How many valid traces before declaring “No_Streak” territory
+    int   valid_traces_for_no_streak = 250;
+
+    // Global tuning of efferent thresholding
+    float score_threshold_modifier = 1.0f;   // multiplies max Fn
+
+    // Optional boredom behaviour tuning
+    int   bored_node_delta          = 0;     // allowed delta before flg_Bored
+};
+
+
+//ChatGPT wrote this, I'm not going to bother fixing the internals. It can stay ugly.
+TraceSelectionConfig load_TraceSelectionConfig(const std::string& p_FName = "Trace_Selection_Config.ssv")
+{
+    TraceSelectionConfig cfg; // starts with defaults
+
+    std::ifstream tmp_File(p_FName);
+    if (!tmp_File.is_open())
+    {
+        std::cerr << "\n[TraceConfig] Could not open config file: " << p_FName
+                  << " — using defaults.\n";
+        return cfg;
+    }
+    std::string tmp_String = "";
+	
+	while(!(tmp_File.eof()))
+	{
+		tmp_File >> tmp_String;
+		//std::cout << "\n[LOADED]: " << tmp_String;
+		if (tmp_String == ""){ continue; }
+
+		if (tmp_String == "weight_SA"){
+			tmp_File >> cfg.weight_SA; std::cout << "\nweight_SA: " << cfg.weight_SA;
+		}
+
+		if (tmp_String == "weight_DM"){
+			tmp_File >> cfg.weight_DM; std::cout << "\nweight_DM: " << cfg.weight_DM;
+		}
+
+		if (tmp_String == "weight_RC"){
+			tmp_File >> cfg.weight_RC; std::cout << "\nweight_RC: " << cfg.weight_RC;
+		}
+
+		if (tmp_String == "weight_Chrg"){
+			tmp_File >> cfg.weight_Chrg; std::cout << "\nweight_Chrg: " << cfg.weight_Chrg;
+		}
+
+		if (tmp_String == "norm_SA_scale"){
+			tmp_File >> cfg.norm_SA_scale; std::cout << "\nnorm_SA_scale: " << cfg.norm_SA_scale;
+		}
+
+		if (tmp_String == "norm_DM_scale"){
+			tmp_File >> cfg.norm_DM_scale; std::cout << "\nnorm_DM_scale: " << cfg.norm_DM_scale;
+		}
+
+		if (tmp_String == "norm_RC_scale"){
+			tmp_File >> cfg.norm_RC_scale; std::cout << "\nnorm_RC_scale: " << cfg.norm_RC_scale;
+		}
+
+		if (tmp_String == "norm_Chrg_scale"){
+			tmp_File >> cfg.norm_Chrg_scale; std::cout << "\nnorm_Chrg_scale: " << cfg.norm_Chrg_scale;
+		}
+
+		if (tmp_String == "min_start_anchor_percent"){
+			tmp_File >> cfg.min_start_anchor_percent; std::cout << "\nmin_start_anchor_percent: " << cfg.min_start_anchor_percent;
+		}
+
+		if (tmp_String == "min_direction_percent"){
+			tmp_File >> cfg.min_direction_percent; std::cout << "\nmin_direction_percent: " << cfg.min_direction_percent;
+		}
+
+		if (tmp_String == "valid_traces_for_no_streak"){
+			tmp_File >> cfg.valid_traces_for_no_streak; std::cout << "\nvalid_traces_for_no_streak: " << cfg.valid_traces_for_no_streak;
+		}
+
+		if (tmp_String == "score_threshold_modifier"){
+			tmp_File >> cfg.score_threshold_modifier; std::cout << "\nscore_threshold_modifier: " << cfg.score_threshold_modifier;
+		}
+
+		if (tmp_String == "bored_node_delta"){
+			tmp_File >> cfg.bored_node_delta; std::cout << "\nbored_node_delta: " << cfg.bored_node_delta;
+		}
+		tmp_String = "";
+	}
+	
+	tmp_File.close();
+	
+		/*
+
+    while (std::getline(in, line))
+    {
+        // Trim leading spaces
+        std::size_t pos = line.find_first_not_of(" \t\r\n");
+        if (pos == std::string::npos) continue;           // blank line
+        if (line[pos] == '#') continue;                   // comment line
+
+        std::istringstream iss(line);
+        std::string key;
+        float value_f = 0.0f;
+        int   value_i = 0;
+
+        if (!(iss >> key))
+            continue;
+
+        // Float keys
+        if (key == "weight_SA")                { if (iss >> value_f) cfg.weight_SA = value_f; }
+        else if (key == "weight_DM")           { if (iss >> value_f) cfg.weight_DM = value_f; }
+        else if (key == "weight_RC")           { if (iss >> value_f) cfg.weight_RC = value_f; }
+        else if (key == "weight_Chrg")         { if (iss >> value_f) cfg.weight_Chrg = value_f; }
+        else if (key == "norm_SA_scale")       { if (iss >> value_f) cfg.norm_SA_scale = value_f; }
+        else if (key == "norm_DM_scale")       { if (iss >> value_f) cfg.norm_DM_scale = value_f; }
+        else if (key == "norm_RC_scale")       { if (iss >> value_f) cfg.norm_RC_scale = value_f; }
+        else if (key == "norm_Chrg_scale")     { if (iss >> value_f) cfg.norm_Chrg_scale = value_f; }
+        else if (key == "score_threshold_modifier")
+        {
+            if (iss >> value_f) cfg.score_threshold_modifier = value_f;
+        }
+        else if (key == "bored_node_delta")
+        {
+            if (iss >> value_i) cfg.bored_node_delta = value_i;
+        }
+        // Int keys
+        else if (key == "min_start_anchor_percent")
+        {
+            if (iss >> value_i) cfg.min_start_anchor_percent = value_i;
+        }
+        else if (key == "min_direction_percent")
+        {
+            if (iss >> value_i) cfg.min_direction_percent = value_i;
+        }
+        else if (key == "valid_traces_for_no_streak")
+        {
+            if (iss >> value_i) cfg.valid_traces_for_no_streak = value_i;
+        }
+        else
+        {
+            // Unknown key; you can log it or ignore quietly.
+            std::cerr << "\n[TraceConfig] Unknown key: " << key;
+        }
+    }
+	*/
+    return cfg;
+}
 
 class c_Projection
 {
@@ -352,11 +578,14 @@ public:
     std::vector<std::vector<std::vector<u_Data>>> Data;
 };
 
+
 //Each input in the homeostasis module input array is given a granulator that can be configured individually.
 class c_Homeostasis_Module
 {
 public:
-
+	
+	TraceSelectionConfig Trace_Selection_Config;
+	
     c_Homeostasis_IO_Module IO;
 
     std::vector<c_Homeostasis_IO_Module> IO_Hist;
@@ -386,6 +615,8 @@ public:
         No_Streak_Off = 0;
         Previous_Node_Count = 0;
         Tick_Count = 0;
+		
+		load_Trace_Selection();
     }
 
     void init(int p_Chrono_Depth)
@@ -394,7 +625,12 @@ public:
         init_TSG(p_Chrono_Depth);
     }
 
-    //Call after you've registered all your afferent and efferent.
+    void load_Trace_Selection()
+	{
+		Trace_Selection_Config = load_TraceSelectionConfig();
+	}
+	
+	//Call after you've registered all your afferent and efferent.
     void init_TSG(int p_Chrono_Depth)
     {
         //int tmp_IO_Depth = ((IO.Afferent_Count) * 3) + ((IO.Efferent_Count) * 3);
@@ -409,7 +645,27 @@ public:
         TSG.encode(p_RF);
     }
 
-    void write_Bulk(std::string p_FName, int p_Tick)
+    void write_System_State_Snapshot(std::string p_FName = "./System_State_Files/snapshot.ssv")
+	{
+		write_AE_State(p_FName);
+	}
+	
+	void write_AE_State(std::string p_FName = "./System_State_Files/snapshot.ssv")
+	{
+		std::ofstream tmp_File(p_FName);
+		
+		if (!tmp_File.is_open())
+		{
+			std::cout << "\n ERROR: Cannot open file [" << p_FName << "] for writing AE state.";
+			return;
+		}
+		
+		IO.write_State(&tmp_File);
+		
+		tmp_File.close();
+	}
+	
+	void write_Bulk(std::string p_FName, int p_Tick)
     {
         std::vector<std::vector<std::vector<NT4::s_Out>>> tmp_Bulk;
 
@@ -420,10 +676,25 @@ public:
         std::ofstream BSF_M;
         std::ofstream BSF_C;
         std::ofstream BSF_R;
-        std::string tmp_BName_D = "./GaiaTesting/" + p_FName + "." + std::to_string(p_Tick) + ".Primitive.ssv";
-        std::string tmp_BName_M = "./GaiaTesting/" + p_FName + "." + std::to_string(p_Tick) + ".Match.ssv";
-        std::string tmp_BName_C = "./GaiaTesting/" + p_FName + "." + std::to_string(p_Tick) + ".Charge.ssv";
-        std::string tmp_BName_R = "./GaiaTesting/" + p_FName + "." + std::to_string(p_Tick) + ".RC.ssv";
+		/*
+        std::string tmp_BName_D = p_FName + "." + std::to_string(p_Tick) + ".Primitive.ssv";
+        std::string tmp_BName_M = p_FName + "." + std::to_string(p_Tick) + ".Match.ssv";
+        std::string tmp_BName_C = p_FName + "." + std::to_string(p_Tick) + ".Charge.ssv";
+        std::string tmp_BName_R = p_FName + "." + std::to_string(p_Tick) + ".RC.ssv";
+		*/
+		
+        std::string tmp_BName_D = p_FName + "Primitive.ssv";
+        std::string tmp_BName_M = p_FName + "Match.ssv";
+        std::string tmp_BName_C = p_FName + "Charge.ssv";
+        std::string tmp_BName_R = p_FName + "RC.ssv";
+		
+		/*
+        BSF_D.open(tmp_BName_D, std::ios::app);
+        BSF_M.open(tmp_BName_M, std::ios::app);
+        BSF_C.open(tmp_BName_C, std::ios::app);
+        BSF_R.open(tmp_BName_R, std::ios::app);
+		*/
+		
         BSF_D.open(tmp_BName_D, std::ios::app);
         BSF_M.open(tmp_BName_M, std::ios::app);
         BSF_C.open(tmp_BName_C, std::ios::app);
@@ -436,10 +707,10 @@ public:
         {
             if (cou_O > 0)
             {
-                BSF_D << "\n";
-                BSF_M << "\n";
-                BSF_C << "\n";
-                BSF_R << "\n";
+                BSF_D << "\n\n\n\n";
+                BSF_M << "\n\n\n\n";
+                BSF_C << "\n\n\n\n";
+                BSF_R << "\n\n\n\n";
             }
             BSF_D << cou_O << " ";
             BSF_M << cou_O << " ";
@@ -465,14 +736,22 @@ public:
 
     void evaluate_Traces(std::string p_FName, float p_Score_Threshold_Modifier)
     {
+		load_Trace_Selection();
+		
         std::cout << "\n Trace Selection in progress...";
         std::vector<std::vector<std::vector<NT4::s_Out>>> tmp_Bulk;
 
         tmp_Bulk = TSG.get_Bulk(1);
-        //write_Bulk(p_FName);
+        write_Bulk("System_State_Files/bulk.", Tick_Count);
 
         std::vector<double> tmp_Deviation_Mapping;
         tmp_Deviation_Mapping = get_Current_Deviation_Set();
+		
+		std::ofstream tmp_Stat_File("System_State_Files/trace_eval_stats.ssv", std::ios::trunc);
+		if (!tmp_Stat_File.is_open())
+		{
+			std::cout << "\n ERROR: Could not open System_State_Files/trace_eval_state.ssv for trace stat logging.";
+		}
 
         // [-----]
         // [--+-+]
@@ -528,21 +807,58 @@ public:
         std::vector<std::vector<float>> tmp_Output_Signals;
 
         bool flg_Bored = false;
-
+		
+		tmp_Stat_File << "\n Bulk.size " << tmp_Bulk.size();
         if (tmp_Bulk.size() > 0)
         {
             tmp_Chrono_Depth = int(tmp_Bulk.size());
-
+			tmp_Stat_File << "\n Chrono_Depth/Bulk.size " << tmp_Bulk.size();
             if (tmp_Chrono_Depth > 0)
             {
+				tmp_Stat_File << "\n Raw_Depth/Bulk[0].size " << tmp_Bulk.size();
                 tmp_Raw_Depth = int(tmp_Bulk[0].size());
 
                 if (tmp_Raw_Depth > 0)
                 {
+					tmp_Stat_File << "\n Output_Depth/int(tmp_Bulk[0][0].size()) " << int(tmp_Bulk[0][0].size());
                     tmp_Output_Depth = int(tmp_Bulk[0][0].size());
                 }
             }
         }
+		
+		tmp_Stat_File << "\nOutput_Traces";
+		std::cout << "\nOutput_Traces";
+		for (int cou_O=0;cou_O<tmp_Output_Depth;cou_O++)
+		{
+			tmp_Stat_File << "\n";
+			tmp_Stat_File << "\n[" << cou_O << "].Data.Float ";
+			std::cout << "\n[" << cou_O << "].Data.Float ";
+			for (int cou_Raw=0;cou_Raw<tmp_Raw_Depth;cou_Raw++)
+			{
+				for (int cou_Chrono=0;cou_Chrono<tmp_Chrono_Depth;cou_Chrono++)
+				{
+					tmp_Stat_File << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].Data.D;
+					std::cout << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].Data.D;
+				}
+			}
+			tmp_Stat_File << "\n.\n[" << cou_O << "].Charge";
+			std::cout << "\n.\n[" << cou_O << "].Charge";
+			
+			tmp_Stat_File << " " << tmp_Bulk[0][0][cou_O].Charge;
+			std::cout << " " << tmp_Bulk[0][0][cou_O].Charge;
+					
+			tmp_Stat_File << "\n[" << cou_O << "].RC";
+			std::cout << "\n[" << cou_O << "].RC";
+			float tmp_RC_Avg = 0.0;
+			for (int cou_Raw=0;cou_Raw<tmp_Raw_Depth;cou_Raw++)
+			{
+				for (int cou_Chrono=0;cou_Chrono<tmp_Chrono_Depth;cou_Chrono++)
+				{
+					tmp_Stat_File << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].RC;
+					std::cout << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].RC;
+				}
+			}
+		}
 
 
         tmp_Validate_Direction.resize(tmp_Chrono_Depth);
@@ -592,23 +908,32 @@ public:
         //TSG.output_Bulk(1);
 
         //TSG.output_IO(0);
-
+		tmp_Stat_File << "\n\nOutputs_Found ";
+		
         if ((tmp_Chrono_Depth > 0) && (tmp_Raw_Depth > 0))
         {
+			tmp_Stat_File << " true";
             for (int cou_O = 0; cou_O < tmp_Output_Depth; cou_O++)
             {
                 tmp_Validate_Charge[cou_O] = tmp_Bulk[0][0][cou_O].Charge;
             }
         }
+		else
+		{
+			tmp_Stat_File << " false";
+		}
 
         //For afferent count find the matches to the starting value
         //---std::cout << "\n Evalitor:";
+        tmp_Stat_File << "\n Evalitor:";
         for (int cou_A = 0; cou_A < IO.Afferent_Count; cou_A++)
         {
             //---std::cout << "\n ___ A[" << cou_A << "]";
+            tmp_Stat_File << "\n ___ A[" << cou_A << "]";
             for (int cou_O = 0; cou_O < tmp_Output_Depth; cou_O++)
             {
                 //---std::cout << "\n ___ ___ O[" << cou_O << "]";
+                tmp_Stat_File << "\n ___ ___ O[" << cou_O << "]";
                 int tmp_AIndex = (cou_A * 3);
 
                 tmp_Bulk[0][(cou_A * 3)][cou_O].flg_Use = 0;
@@ -617,6 +942,11 @@ public:
                 //---std::cout << "  D: " << tmp_Bulk[0][tmp_AIndex][cou_O].Data.D;
                 //---std::cout << "  I: " << TSG.get_Input(0, 0, tmp_AIndex);
                 //---std::cout << "  ?= " << (tmp_Bulk[0][tmp_AIndex][cou_O].Data.D == TSG.get_Input(0, 0, tmp_AIndex));
+				
+                tmp_Stat_File << " - AIndex[" << tmp_AIndex << "]";
+                tmp_Stat_File << "  D: " << tmp_Bulk[0][tmp_AIndex][cou_O].Data.D;
+                tmp_Stat_File << "  I: " << TSG.get_Input(0, 0, tmp_AIndex);
+                tmp_Stat_File << "  ?= " << (tmp_Bulk[0][tmp_AIndex][cou_O].Data.D == TSG.get_Input(0, 0, tmp_AIndex));
                 if (tmp_Bulk[0][tmp_AIndex][cou_O].Data.D == TSG.get_Input(0, 0, tmp_AIndex))
                 {
                     tmp_Bulk[0][tmp_AIndex][cou_O].flg_Use = 1;
@@ -627,6 +957,11 @@ public:
                 tmp_Validate_RC_Sum[cou_O] += tmp_Bulk[0][tmp_AIndex][cou_O].RC;
 
                 tmp_AIndex = ((cou_A * 3) + 1);
+
+                tmp_Stat_File << " - AIndex[" << tmp_AIndex << "]";
+                tmp_Stat_File << "  D: " << tmp_Bulk[0][tmp_AIndex][cou_O].Data.D;
+                tmp_Stat_File << "  I: " << TSG.get_Input(0, 0, tmp_AIndex);
+                tmp_Stat_File << "  ?= " << (tmp_Bulk[0][tmp_AIndex][cou_O].Data.D == TSG.get_Input(0, 0, tmp_AIndex));
 
                 //---std::cout << " - AIndex[" << tmp_AIndex << "]";
                 //---std::cout << "  D: " << tmp_Bulk[0][tmp_AIndex][cou_O].Data.D;
@@ -656,6 +991,11 @@ public:
                     //---std::cout << "  D: " << tmp_Bulk[cou_Chrono][tmp_AIndex][cou_O].Data.D;
                     //---std::cout << "  M: " << IO.get_Current_Afferent_Deviation(cou_A);
                     //---std::cout << "  ?= " << (tmp_Bulk[cou_Chrono][tmp_AIndex][cou_O].Data.D == IO.get_Current_Afferent_Deviation(cou_A));
+
+                    tmp_Stat_File << " - Chrono[" << cou_Chrono << "]";
+                    tmp_Stat_File << "  D: " << tmp_Bulk[cou_Chrono][tmp_AIndex][cou_O].Data.D;
+                    tmp_Stat_File << "  M: " << IO.get_Current_Afferent_Deviation(cou_A);
+                    tmp_Stat_File << "  ?= " << (tmp_Bulk[cou_Chrono][tmp_AIndex][cou_O].Data.D == IO.get_Current_Afferent_Deviation(cou_A));
                     if (tmp_Bulk[cou_Chrono][tmp_AIndex][cou_O].Data.D == IO.get_Current_Afferent_Deviation(cou_A))
                     {
                         tmp_Validate_Direction[cou_Chrono][cou_A][cou_O]++;
@@ -738,10 +1078,10 @@ public:
         {
             for (int cou_O = 0; cou_O < tmp_Output_Depth; cou_O++)
             {
-                tmp_Validate_Start_Anchor_Sum[cou_O] = int((tmp_Validate_Start_Anchor_Sum[cou_O] / tmp_Normalized_Start_Anchor_Sum) * 100);
-                tmp_Validate_Direction_Sum[cou_O] = int((tmp_Validate_Direction_Sum[cou_O] / tmp_Normalized_Direction_Sum) * 100);
-                tmp_Validate_RC_Sum[cou_O] = float(int((tmp_Validate_RC_Sum[cou_O] / tmp_Normalized_RC_Sum) * 10));
-                tmp_Validate_Charge[cou_O] = float(int((tmp_Validate_Charge[cou_O] / tmp_Normalized_Charge_Sum) * 10));
+                tmp_Validate_Start_Anchor_Sum[cou_O] = int((tmp_Validate_Start_Anchor_Sum[cou_O] / tmp_Normalized_Start_Anchor_Sum) * Trace_Selection_Config.norm_SA_scale);
+                tmp_Validate_Direction_Sum[cou_O] = int((tmp_Validate_Direction_Sum[cou_O] / tmp_Normalized_Direction_Sum) * Trace_Selection_Config.norm_DM_scale);
+                tmp_Validate_RC_Sum[cou_O] = float(int((tmp_Validate_RC_Sum[cou_O] / tmp_Normalized_RC_Sum) * Trace_Selection_Config.norm_RC_scale));
+                tmp_Validate_Charge[cou_O] = float(int((tmp_Validate_Charge[cou_O] / tmp_Normalized_Charge_Sum) * Trace_Selection_Config.norm_Chrg_scale));
             }
         }
         else
@@ -773,8 +1113,8 @@ public:
         {
             bool tmp_Flg_Valid_Trace = false;
 
-            if (tmp_Validate_Direction_Sum[cou_O] == 0) { continue; }
-            if (tmp_Validate_Start_Anchor_Sum[cou_O] == 0) { continue; }
+            if (tmp_Validate_Direction_Sum[cou_O] < Trace_Selection_Config.min_direction_percent) { continue; }
+            if (tmp_Validate_Start_Anchor_Sum[cou_O] < Trace_Selection_Config.min_start_anchor_percent) { continue; }
 
             //---std::cout << "\n[" << cou_O << "] ";
             //---std::cout << " DMatch ";
@@ -888,6 +1228,11 @@ public:
             //---std::cout << "\tDS: " << tmp_Validate_Direction_Sum[cou_O];
             //---std::cout << "\tRC: " << tmp_Validate_RC_Sum[cou_O];
             //---std::cout << "\tChrg: " << tmp_Validate_Charge[cou_O];
+
+            tmp_Stat_File << "\tSA: " << tmp_Validate_Start_Anchor_Sum[cou_O];
+            tmp_Stat_File << "\tDS: " << tmp_Validate_Direction_Sum[cou_O];
+            tmp_Stat_File << "\tRC: " << tmp_Validate_RC_Sum[cou_O];
+            tmp_Stat_File << "\tChrg: " << tmp_Validate_Charge[cou_O];
         }
 
         int tmp_Almost_Valid_Traces = 0;
@@ -1021,9 +1366,31 @@ public:
             //tmp_Output_Signals[cou_E][4] = (tmp_Output_Signals[cou_E][4] - tmp_Lowest_Output_Signal[4]) / tmp_Highest_Output_Signal[4];
             //tmp_Output_Signals[cou_E][1] = (tmp_Output_Signals[cou_E][1] / tmp_Highest_Output_Signal[1]) * 10;
             //tmp_Output_Signals[cou_E][2] = (tmp_Output_Signals[cou_E][2] / tmp_Highest_Output_Signal[2]) * 2;
-            tmp_Output_Signals[cou_E][3] = (tmp_Output_Signals[cou_E][3] / tmp_Highest_Output_Signal[3]) * 1;
-            tmp_Output_Signals[cou_E][4] = (tmp_Output_Signals[cou_E][4] / tmp_Highest_Output_Signal[4]) * 1;
-
+			if (tmp_Highest_Output_Signal[1] > 0)
+			{
+				tmp_Output_Signals[cou_E][1] = (tmp_Output_Signals[cou_E][1] / tmp_Highest_Output_Signal[1]) * 1;
+			}
+			if (tmp_Highest_Output_Signal[2] > 0)
+			{
+				tmp_Output_Signals[cou_E][2] = (tmp_Output_Signals[cou_E][2] / tmp_Highest_Output_Signal[2]) * 1;
+			}
+			if (tmp_Highest_Output_Signal[3] > 0)
+			{
+				tmp_Output_Signals[cou_E][3] = (tmp_Output_Signals[cou_E][3] / tmp_Highest_Output_Signal[3]) * 1;
+			}
+			
+			if (tmp_Highest_Output_Signal[4] > 0)
+			{
+				tmp_Output_Signals[cou_E][4] = (tmp_Output_Signals[cou_E][4] / tmp_Highest_Output_Signal[4]) * 1;
+			}
+			
+			
+			tmp_Output_Signals[cou_E][0] += tmp_Output_Signals[cou_E][1] * Trace_Selection_Config.weight_SA;
+			tmp_Output_Signals[cou_E][0] += tmp_Output_Signals[cou_E][2] * Trace_Selection_Config.weight_DM;
+			tmp_Output_Signals[cou_E][0] += tmp_Output_Signals[cou_E][3] * Trace_Selection_Config.weight_RC;
+			tmp_Output_Signals[cou_E][0] += tmp_Output_Signals[cou_E][4] * Trace_Selection_Config.weight_Chrg;
+			
+			/*
             for (int cou_Rawr = 1; cou_Rawr < 5; cou_Rawr++)
             {
                 tmp_Output_Signals[cou_E][0] += tmp_Output_Signals[cou_E][cou_Rawr];
@@ -1032,17 +1399,31 @@ public:
             for (int cou_Chrono = 0; cou_Chrono < tmp_Chrono_Depth; cou_Chrono++)
             {
                 //tmp_Output_Signals[cou_E][0] += tmp_Validate_Signals_Sum[cou_Chrono][cou_E];
-            }
+            }*/
 
             std::cout << "\nOutput_Signal[" << cou_E << "] ";
             std::cout << "Fn: " << int(tmp_Output_Signals[cou_E][0] * 100) << "      ";
-            std::cout << "\tSA: " << int(tmp_Output_Signals[cou_E][1] * 10);
-            std::cout << "\tDM: " << int(tmp_Output_Signals[cou_E][2] * 10);
-            std::cout << "\tRC: " << int(tmp_Output_Signals[cou_E][3] * 10);
-            std::cout << "\tChrg: " << int(tmp_Output_Signals[cou_E][4] * 10);
+            std::cout << "\tSA: " << int(tmp_Output_Signals[cou_E][1] * Trace_Selection_Config.weight_SA);
+            std::cout << "\tDM: " << int(tmp_Output_Signals[cou_E][2] * Trace_Selection_Config.weight_DM);
+            std::cout << "\tRC: " << int(tmp_Output_Signals[cou_E][3] * Trace_Selection_Config.weight_RC);
+            std::cout << "\tChrg: " << int(tmp_Output_Signals[cou_E][4] * Trace_Selection_Config.weight_Chrg);
+			
+			
+            tmp_Stat_File << "\nOutput_Signal[" << cou_E << "] ";
+            tmp_Stat_File << "Fn: " << int(tmp_Output_Signals[cou_E][0] * 100);
+            tmp_Stat_File << " SA: " << int(tmp_Output_Signals[cou_E][1] * Trace_Selection_Config.weight_SA);
+            tmp_Stat_File << " DM: " << int(tmp_Output_Signals[cou_E][2] * Trace_Selection_Config.weight_DM);
+            tmp_Stat_File << " RC: " << int(tmp_Output_Signals[cou_E][3] * Trace_Selection_Config.weight_RC);
+            tmp_Stat_File << " Chrg: " << int(tmp_Output_Signals[cou_E][4] * Trace_Selection_Config.weight_Chrg);
         }
 
         std::cout << "\n\n\t Total Traces Found: " << tmp_Output_Depth;
+		
+		for (int cou_O=0;cou_O<tmp_Output_Depth;cou_O++)
+		{
+			
+		}
+		
         std::cout << "\n\t\t Almost Valid Traces Found: " << tmp_Almost_Valid_Traces;
         std::cout << "\n\t\t Valid Traces Found: " << tmp_Valid_Traces;
 		
@@ -1475,7 +1856,11 @@ public:
         */
         std::cout << "\n\n______\n";
         //std::system("PAUSE");
+		
+		write_System_State_Snapshot();
     }
+	
+
 
     int get_Output_Signals(int p_Index)
     {
@@ -1751,6 +2136,15 @@ public:
     {
 
         TSG.output_Scaffolds();
+    }
+
+    void log_Scaffolds(int p_Tick)
+    {
+		
+		std::ofstream tmp_OFile("System_State_Files/scaffolds.ssv", std::ios::app);
+		tmp_OFile << "\n" << p_Tick;
+		tmp_OFile.close();
+        TSG.log_Scaffolds();
     }
 
     void output_AE()
@@ -2543,14 +2937,15 @@ public:
 				{
 					std::cerr << "\n\n   Error: Failed to execute system update script!\n\n";
 				}
-				API.Tick_Count++;
 				Tick_Processor++;
-				
 				
 				log_Current_Status();
 				log_Current_Onions();
 				log_Deviation_Mapping();
 				log_Current_Projection();
+				API.write_System_State_Snapshot();
+				//Does this in eval_Traces
+				//API.write_Bulk(1, "/System_State_Files/bulk.ssv");
 			}
             Tick++;
 			
@@ -2623,7 +3018,7 @@ public:
     {
         std::vector<std::vector<u_Data>> tmp_Projection = API.get_Current_Projection(p_RF);
 
-        std::ofstream projFile("./System_State_Files/projection.ssv", std::ios::trunc);
+        std::ofstream projFile("./System_State_Files/projection.ssv", std::ios::app);
         if (!projFile.is_open())
         {
             std::cerr << "\n[log_Current_Projection] Unable to open ./System_State_Files/projection.ssv\n";
@@ -2650,7 +3045,7 @@ public:
     {
         std::vector<double> tmp_Deviation = API.get_Current_Deviation_Set();
 
-        std::ofstream devFile("./System_State_Files/deviation_mapping.ssv", std::ios::trunc);
+        std::ofstream devFile("./System_State_Files/deviation_mapping.ssv", std::ios::app);
         if (!devFile.is_open())
         {
             std::cerr << "\n[log_Deviation_Mapping] Unable to open ./System_State_Files/deviation_mapping.ssv\n";

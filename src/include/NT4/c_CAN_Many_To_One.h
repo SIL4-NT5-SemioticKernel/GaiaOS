@@ -494,6 +494,23 @@ public:
 		if (Scaffold[1][0] != NULL) { std::cout << " [" << Scaffold[1][0]->NID << "]"; } else { std::cout << "[NULL]"; }
 	}
 
+	//Outputs the scaffold.
+	void log_Scaffold(std::ofstream * p_OFile)
+	{
+		*p_OFile << "\nTier[0].data";
+		for (int cou_Index = 0; cou_Index < State_Depth; cou_Index++)
+		{
+			if (Scaffold[0][cou_Index] != NULL) { *p_OFile << " [" << Scaffold[0][cou_Index]->State << "] "; } else { *p_OFile << "[NULL]"; }
+		}
+		*p_OFile << "\nTier[0].NID";
+		for (int cou_Index = 0; cou_Index < State_Depth; cou_Index++)
+		{
+			if (Scaffold[0][cou_Index] != NULL) { *p_OFile << " [" << Scaffold[0][cou_Index]->NID << "] "; } else { *p_OFile << "[NULL]"; }
+		}
+		*p_OFile << "\nTier[1] ";
+		if (Scaffold[1][0] != NULL) { *p_OFile << " [" << Scaffold[1][0]->NID << "]"; } else { *p_OFile << "[NULL]"; }
+	}
+
 
 	//Outputs the scaffold as character representing the address.
 	void output_Scaffold_Char()

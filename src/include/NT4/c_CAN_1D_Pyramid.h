@@ -566,6 +566,21 @@ public:
 		}
 	}
 
+	//Outputs the scaffold.
+	void log_Scaffold(std::ofstream * p_OFile)
+	{
+		for (int cou_T = 0; cou_T < State_Depth; cou_T++)
+		{
+			*p_OFile << "\nT<" << cou_T << ">";
+			for (int cou_Index = 0; cou_Index < (State_Depth - cou_T); cou_Index++)
+			{
+				*p_OFile << " [";
+				if (Scaffold[cou_T][cou_Index] != NULL) { *p_OFile << Scaffold[cou_T][cou_Index]->NID; } else { *p_OFile << "NULL"; }
+				*p_OFile << "] ";
+			}
+		}
+	}
+
 	//Outputs the scaffold as character representing the address.
 	void output_Scaffold_Char()
 	{

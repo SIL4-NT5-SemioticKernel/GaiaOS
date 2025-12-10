@@ -437,8 +437,9 @@ public:
 
 	//==--   Output Functions   --==//
 
-	//Outputs the scaffold as addresses.
+	//Outputs/logs the scaffold as addresses.
 	virtual void output_Scaffold()=0;
+	virtual void log_Scaffold(std::ofstream * p_SFile)=0;
 
 	//Outputs the input array.
 	void output_Input(int p_Type = 0)
