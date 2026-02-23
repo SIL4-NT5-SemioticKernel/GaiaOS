@@ -7,7 +7,7 @@ norm_DM_scale 100.0
 norm_RC_scale 100.0
 norm_Chrg_scale 100.0
 min_start_anchor_percent 0
-min_direction_percent 0.1
+min_direction_percent 99
 valid_traces_for_no_streak 250
-score_threshold_modifier 1.0
+score_threshold_modifier 0.5
 bored_node_delta 0

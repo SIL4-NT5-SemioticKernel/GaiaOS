@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import math
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -459,6 +460,233 @@ class LinePlotCanvas(tk.Canvas):
             y_offset += 12
 
 # ---------------------------------------------------------------------------
+# Small dashboard widgets (Status / Goals)
+# ---------------------------------------------------------------------------
+
+class LedIndicator(tk.Canvas):
+    """Tiny circular LED indicator."""
+
+    def __init__(self, master, size=14, on_color="green", off_color="#9a9a9a", **kwargs):
+        bg = kwargs.pop("bg", None)
+        super().__init__(master, width=size, height=size, highlightthickness=0, bg=bg, **kwargs)
+        self._on_color = on_color
+        self._off_color = off_color
+        pad = 2
+        self._oval = self.create_oval(
+            pad, pad, size - pad, size - pad,
+            outline="#222222", width=1, fill=self._off_color
+        )
+
+    def set_on(self, on: bool, on_color=None, off_color=None):
+        if on_color is not None:
+            self._on_color = on_color
+        if off_color is not None:
+            self._off_color = off_color
+        self.itemconfigure(self._oval, fill=(self._on_color if on else self._off_color))
+
+
+    # Back-compat: some callers use set_state()
+    def set_state(self, on: bool, on_color=None, off_color=None):
+        return self.set_on(on, on_color=on_color, off_color=off_color)
+
+
+class MiniPlotCanvas(tk.Canvas):
+    """Lightweight grid + line plot for per-channel history."""
+
+    def __init__(self, master, width=420, height=80, **kwargs):
+        bg = kwargs.pop("bg", "#f5f5f5")
+        super().__init__(
+            master, width=width, height=height,
+            bg=bg, highlightthickness=1, highlightbackground="#2b2b2b", **kwargs
+        )
+
+    def plot(self, x_data, y_data, title=None, goal=None, x_hint=None, message=None):
+        """Draw a small scrolling history plot.
+
+        - Oldest samples appear on the left, newest on the right.
+        - If `goal` is numeric, draws a horizontal goal line.
+        - Adds a compact title and y-scale labels for readability.
+        """
+        self.delete("all")
+        self.update_idletasks()
+
+        w = max(int(self.winfo_width()), 10)
+        h = max(int(self.winfo_height()), 10)
+
+        # Layout margins (keep very small, this is a tiny plot)
+        m_left = 44
+        m_right = 6
+        m_top = 16
+        m_bottom = 14
+
+        plot_w = max(w - m_left - m_right, 2)
+        plot_h = max(h - m_top - m_bottom, 2)
+        x0 = m_left
+        y0 = m_top
+        x1 = m_left + plot_w
+        y1 = m_top + plot_h
+
+        def _fmt(v):
+            try:
+                v = float(v)
+            except Exception:
+                return str(v)
+            av = abs(v)
+            if av >= 1000:
+                return f"{v:.0f}"
+            if av >= 100:
+                return f"{v:.1f}"
+            if av >= 10:
+                return f"{v:.2f}"
+            if av >= 1:
+                return f"{v:.3f}"
+            return f"{v:.4f}"
+
+        # Title
+        if title:
+            self.create_text(2, 2, text=str(title), fill="#111111", anchor="nw")
+
+        if message is not None:
+            self.create_text(w // 2, h // 2, text=message, fill="#333333")
+            return
+
+        if not x_data or not y_data:
+            self.create_text(w // 2, h // 2, text="(no data)", fill="#333333")
+            return
+
+        # compute bounds ignoring None
+        xs = [x for x in x_data if isinstance(x, (int, float))]
+        ys = [y for y in y_data if isinstance(y, (int, float))]
+        if not xs or not ys:
+            self.create_text(w // 2, h // 2, text="(no numeric data)", fill="#333333")
+            return
+
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
+        if isinstance(goal, (int, float)):
+            y_min = min(y_min, float(goal))
+            y_max = max(y_max, float(goal))
+
+        if x_max == x_min:
+            x_max = x_min + 1.0
+        if y_max == y_min:
+            y_max = y_min + 1.0
+
+        # padding
+        y_pad = 0.06 * (y_max - y_min)
+        y_min -= y_pad
+        y_max += y_pad
+
+        # Background grid (inside plot area only)
+        grid_px = 10
+        for gx in range(x0, x1 + 1, grid_px):
+            self.create_line(gx, y0, gx, y1, fill="#d0d0d0")
+        for gy in range(y0, y1 + 1, grid_px):
+            self.create_line(x0, gy, x1, gy, fill="#d0d0d0")
+
+        # Axes
+        self.create_line(x0, y0, x0, y1, fill="#2b2b2b")      # y-axis
+        self.create_line(x0, y1, x1, y1, fill="#2b2b2b")      # x-axis
+
+        # y-scale labels
+        self.create_text(x0 - 4, y0, text=_fmt(y_max), fill="#111111", anchor="ne")
+        self.create_text(x0 - 4, y1, text=_fmt(y_min), fill="#111111", anchor="se")
+
+        # x hint (optional)
+        if x_hint:
+            self.create_text(x1, y1 + 2, text=str(x_hint), fill="#111111", anchor="nw")
+
+        def x_to_px(x):
+            return x0 + (x - x_min) / (x_max - x_min) * plot_w
+
+        def y_to_px(y):
+            return y1 - (y - y_min) / (y_max - y_min) * plot_h
+
+        # goal line
+        if isinstance(goal, (int, float)):
+            gy = y_to_px(float(goal))
+            self.create_line(x0, gy, x1, gy, fill="#1b5cb8", dash=(3, 3))
+            self.create_text(x1 - 2, gy - 2, text=f"goal {_fmt(goal)}", fill="#1b5cb8", anchor="se")
+
+        # draw polyline segments (break on None)
+        pts = []
+        last_xy = None
+        for x, y in zip(x_data, y_data):
+            if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                if len(pts) >= 4:
+                    self.create_line(
+                        *pts,
+                        fill="#d11f1f",
+                        width=3,
+                        capstyle="round",
+                        joinstyle="round"
+                    )
+                pts = []
+                last_xy = None
+                continue
+            px = x_to_px(float(x))
+            py = y_to_px(float(y))
+            pts.extend([px, py])
+            last_xy = (px, py)
+
+        if len(pts) >= 4:
+            self.create_line(
+                *pts,
+                fill="#d11f1f",
+                width=3,
+                capstyle="round",
+                joinstyle="round"
+            )
+
+        # marker at the newest point (helps visually confirm updates on flat signals)
+        if last_xy is not None:
+            px, py = last_xy
+            r = 2
+            self.create_oval(px - r, py - r, px + r, py + r, fill="#d11f1f", outline="")
+
+
+class _ScrollableFrame(ttk.Frame):
+    """A ttk.Frame with a vertical scrollbar."""
+
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        self._canvas = tk.Canvas(self, highlightthickness=0)
+        self._vsb = ttk.Scrollbar(self, orient="vertical", command=self._canvas.yview)
+        self._canvas.configure(yscrollcommand=self._vsb.set)
+
+        self._inner = ttk.Frame(self._canvas)
+        self._inner_id = self._canvas.create_window((0, 0), window=self._inner, anchor="nw")
+
+        self._canvas.grid(row=0, column=0, sticky="nsew")
+        self._vsb.grid(row=0, column=1, sticky="ns")
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+
+        self._inner.bind("<Configure>", self._on_inner_configure)
+        self._canvas.bind("<Configure>", self._on_canvas_configure)
+
+        # mouse wheel support (best-effort)
+        self._canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    @property
+    def inner(self):
+        return self._inner
+
+    def _on_inner_configure(self, _event=None):
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event):
+        # keep inner width in sync with canvas width
+        self._canvas.itemconfigure(self._inner_id, width=event.width)
+
+    def _on_mousewheel(self, event):
+        try:
+            # Windows / Mac (delta sign differs but division works)
+            self._canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        except Exception:
+            pass
+
+# ---------------------------------------------------------------------------
 # Main UI
 # ---------------------------------------------------------------------------
 
@@ -470,7 +698,8 @@ class GaiaConfigUI(tk.Tk):
         self.geometry("1200x800")
 
         # auto-refresh toggles
-        self.summary_auto_var    = tk.BooleanVar(value=False)
+        self.summary_auto_var    = tk.BooleanVar(value=True)
+        self._summary_after_id     = None
         self.io_auto_var         = tk.BooleanVar(value=False)
         self.status_auto_var     = tk.BooleanVar(value=False)
         self.underhood_auto_var  = tk.BooleanVar(value=False)
@@ -507,9 +736,26 @@ class GaiaConfigUI(tk.Tk):
 
         # max points after downsampling for plots
         self.max_points          = 1000
+        # --- Summary dashboard history buffer (in-GUI rolling window) ---
+        self.dashboard_history_points_var = tk.IntVar(value=180)  # 0 = unlimited
+        self.dashboard_histories = {}  # (kind, idx) -> {"x": deque, "y": deque}
+        # Dashboard history sources:
+        # We prefer plotting from the same history-window files used by "Under The Hood" (Skelly_Panels.ssv),
+        # falling back to in-GUI sampled status values only when no suitable file source is found.
+        self._dashboard_history_sources = {}   # (kind, idx) -> {"type": "panel"/"file"/"status", ...}
+        self._dashboard_file_cache = {}        # path -> {"mtime": float, "parsed": dict}
+        self._dashboard_panel_cache = {}       # panel_id -> {"mt_sig": tuple, "data": dict}
+        self._dashboard_last_update_text = ""  # rendered in dashboard header
+        self._dashboard_row_defs = []  # cached slot defs (kind, idx, label)
+        self._dashboard_sample_counter = 0
 
         self._build_widgets()
         self.refresh_all()
+
+
+        # start summary auto-refresh loop (for dashboard history)
+        if self.summary_auto_var.get():
+            self._schedule_summary_refresh()
 
     # --- Layout scaffold ---------------------------------------------------
 
@@ -960,7 +1206,100 @@ class GaiaConfigUI(tk.Tk):
 
 
     def _build_summary_tab(self):
-        top = ttk.Frame(self.summary_frame)
+        outer = ttk.Frame(self.summary_frame)
+        outer.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Inside Status/Goals, default to a dashboard view, but keep the old tables.
+        self.summary_nb = ttk.Notebook(outer)
+        self.summary_nb.pack(fill=tk.BOTH, expand=True)
+
+        self.summary_dashboard_frame = ttk.Frame(self.summary_nb)
+        self.summary_tables_frame = ttk.Frame(self.summary_nb)
+
+        self.summary_nb.add(self.summary_dashboard_frame, text="Dashboard")
+        self.summary_nb.add(self.summary_tables_frame, text="Tables")
+
+        self._build_summary_dashboard()
+        self._build_summary_tables()
+
+    def _build_summary_dashboard(self):
+        top = ttk.Frame(self.summary_dashboard_frame)
+        top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Header / controls
+        hdr = ttk.Frame(top)
+        hdr.pack(fill=tk.X, pady=(0, 6))
+
+        self.dash_engine_var = tk.StringVar(value="Engine: unknown")
+        ttk.Label(hdr, textvariable=self.dash_engine_var).pack(side=tk.LEFT)
+
+        # Shows when the dashboard last refreshed (helps confirm updates even on flat signals)
+        self.dash_update_var = tk.StringVar(value="")
+        ttk.Label(hdr, textvariable=self.dash_update_var).pack(side=tk.LEFT, padx=(10, 0))
+
+        ttk.Label(hdr, text="History points:").pack(side=tk.LEFT, padx=(15, 3))
+        self.dash_points_spin = ttk.Spinbox(
+            hdr,
+            from_=0,
+            to=5000,
+            increment=10,
+            textvariable=self.dashboard_history_points_var,
+            width=7,
+        )
+        self.dash_points_spin.pack(side=tk.LEFT)
+
+        ttk.Button(hdr, text="Clear history", command=self._dashboard_clear_history).pack(
+            side=tk.LEFT, padx=8
+        )
+
+        ttk.Button(hdr, text="Refresh", command=self.refresh_summary).pack(side=tk.RIGHT)
+
+        auto_chk = ttk.Checkbutton(
+            hdr,
+            text="Auto-refresh",
+            variable=self.summary_auto_var,
+            command=self.on_summary_auto_toggle,
+        )
+        auto_chk.pack(side=tk.RIGHT, padx=(0, 10))
+
+        # Column headers
+        cols = ttk.Frame(top)
+        cols.pack(fill=tk.X, pady=(0, 4))
+        ttk.Label(cols, text="History").grid(row=0, column=0, sticky="w", padx=(5, 0))
+        ttk.Label(cols, text="Goal").grid(row=0, column=1, sticky="w", padx=(10, 0))
+        ttk.Label(cols, text="Output").grid(row=0, column=2, sticky="w", padx=(10, 0))
+        cols.columnconfigure(0, weight=1)
+
+        # Scrollable rows area
+        self.dash_rows_scroller = _ScrollableFrame(top)
+        self.dash_rows_scroller.pack(fill=tk.BOTH, expand=True)
+
+        self.dash_rows_container = self.dash_rows_scroller.inner
+        self.dash_row_widgets = {}  # (kind, idx) -> widget dict
+
+        # Footer shortcuts (kept from the older summary view)
+        ftr = ttk.Frame(top)
+        ftr.pack(fill=tk.X, pady=(6, 0))
+
+        ttk.Button(
+            ftr, text="Open Control Panel", command=lambda: self.nb.select(self.ctrl_frame)
+        ).pack(side=tk.LEFT)
+
+        ttk.Button(
+            ftr, text="Open I/O State", command=lambda: self.nb.select(self.io_frame)
+        ).pack(side=tk.LEFT, padx=6)
+
+        ttk.Button(
+            ftr, text="Open Under The Hood", command=lambda: self.nb.select(self.underhood_frame)
+        ).pack(side=tk.LEFT, padx=6)
+
+        ttk.Button(
+            ftr, text="Open System Status", command=lambda: self.nb.select(self.status_frame)
+        ).pack(side=tk.LEFT, padx=6)
+
+    def _build_summary_tables(self):
+        # This preserves the previous "Status / Goals" content.
+        top = ttk.Frame(self.summary_tables_frame)
         top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # Engine state box
@@ -1069,8 +1408,698 @@ class GaiaConfigUI(tk.Tk):
             command=lambda: self.nb.select(self.underhood_frame),
         ).pack(side=tk.LEFT, padx=5)
 
+    def _dashboard_clear_history(self):
+        # Note: if plots are sourced from engine history-window files, this does not delete/alter those files.
+        # It clears only GUI-side caches/buffers.
+        self.dashboard_histories = {}
+        self._dashboard_sample_counter = 0
+        self._dashboard_file_cache = {}
+        # refresh plots immediately
+        self._dashboard_refresh_from_status(None, {}, {})
+
+
+    def _dashboard_get_slots(self, afferents, efferents):
+        """Return ordered dashboard slots.
+
+        The intent is: show rows in pinout.cfg order, but *map them onto the
+        real A#/E# indices that exist in status.ssv*, so the dashboard doesn't
+        go blank when pinout ordering doesn't match engine indexing.
+
+        Any remaining channels present in status.ssv but not referenced by
+        pinout.cfg are appended as "(unmapped)" rows.
+        """
+        try:
+            entries = self._parse_pinout()
+        except Exception:
+            entries = []
+
+        if entries:
+            return self._dashboard_map_pinout_to_status_slots(entries, afferents, efferents)
+
+        return self._dashboard_get_slots_from_status(afferents, efferents)
+
+    def _dashboard_extract_index(self, ent, kind):
+        """Best-effort extraction of an explicit A#/E# index from a pinout entry."""
+        try:
+            raw = " ".join([
+                str(ent.get("mode", "")),
+                str(ent.get("desc", "")),
+                str(ent.get("path", "")),
+                str(ent.get("raw", "")),
+            ])
+        except Exception:
+            raw = str(ent)
+
+        # strict: A12 / E7
+        m = re.search(rf"\b{kind}(\d+)\b", raw, flags=re.IGNORECASE)
+        if m:
+            try:
+                return int(m.group(1))
+            except Exception:
+                pass
+
+        # loose: Afferent_12, Efferent-3, etc
+        m = re.search(rf"\b{kind}[^0-9]{{0,8}}(\d+)\b", raw, flags=re.IGNORECASE)
+        if m:
+            try:
+                return int(m.group(1))
+            except Exception:
+                pass
+
+        return None
+
+    def _dashboard_map_pinout_to_status_slots(self, entries, afferents, efferents):
+        aff_avail = sorted(afferents.keys()) if isinstance(afferents, dict) else []
+        eff_avail = sorted(efferents.keys()) if isinstance(efferents, dict) else []
+        used_aff = set()
+        used_eff = set()
+
+        slots = []
+
+        def _next_unused(avail, used):
+            for i in avail:
+                if i not in used:
+                    return i
+            return None
+
+        # Map pinout rows first (keeps the human-facing order)
+        for ent in entries:
+            mode = (ent.get("mode") or "").strip()
+            kind = "E" if mode.startswith("E") else "A"
+
+            if kind == "A":
+                idx = self._dashboard_extract_index(ent, "A")
+                if idx is None or idx not in aff_avail or idx in used_aff:
+                    idx = _next_unused(aff_avail, used_aff)
+                if idx is not None:
+                    used_aff.add(idx)
+                else:
+                    # keep the row, but it will be "unmapped" (no engine channel available)
+                    idx = -(1000 + sum(1 for k, i, _ in slots if k == "A" and i < 0))
+                slots.append(("A", idx, ent))
+
+            else:
+                idx = self._dashboard_extract_index(ent, "E")
+                if idx is None or idx not in eff_avail or idx in used_eff:
+                    idx = _next_unused(eff_avail, used_eff)
+                if idx is not None:
+                    used_eff.add(idx)
+                else:
+                    idx = -(2000 + sum(1 for k, i, _ in slots if k == "E" and i < 0))
+                slots.append(("E", idx, ent))
+
+        # Append any remaining channels from status.ssv that weren't referenced/mapped.
+        for idx in aff_avail:
+            if idx not in used_aff:
+                slots.append(("A", idx, {"mode": "A", "desc": f"(unmapped) A{idx}", "path": "", "raw": ""}))
+        for idx in eff_avail:
+            if idx not in used_eff:
+                slots.append(("E", idx, {"mode": "E", "desc": f"(unmapped) E{idx}", "path": "", "raw": ""}))
+
+        return slots
+
+
+    def _dashboard_get_slots_from_status(self, afferents, efferents):
+        slots = []
+        for idx in sorted(afferents.keys()):
+            slots.append(("A", idx, {"mode": "A", "desc": f"A{idx}", "path": ""}))
+        for idx in sorted(efferents.keys()):
+            slots.append(("E", idx, {"mode": "E", "desc": f"E{idx}", "path": ""}))
+        return slots
+
+
+    def _dashboard_resolve_history_sources(self, slots):
+        """Resolve per-row history sources.
+
+        Priority:
+          1) A matching panel in Skelly_Panels.ssv (same files/logic as Under The Hood)
+          2) A best-guess history/log file under System_State_Files/
+          3) Fallback: in-GUI sampled status values (self.dashboard_histories)
+        """
+        sources = {}
+        panel_defs = getattr(self, "panel_defs", None) or []
+
+        for kind, idx, ent in slots:
+            key = (kind, idx)
+            channel = f"{kind}{idx}" if isinstance(idx, int) and idx >= 0 else None
+            src = None
+
+            # 1) Prefer the same sources used by Under The Hood via Skelly_Panels.ssv
+            if channel and panel_defs:
+                pd = self._dashboard_pick_panel_for_channel(channel, panel_defs)
+                if pd is not None:
+                    series_idx = None
+                    # If this panel is an io_log/matrix with multiple series, we need an index.
+                    if getattr(pd, "kind", "") == "io_log":
+                        series_idx = idx
+                    elif getattr(pd, "kind", "") == "matrix_rows":
+                        series_idx = idx
+                    src = {"type": "panel", "panel": pd, "series_idx": series_idx}
+
+            # 2) Best-effort file search under System_State_Files/
+            if src is None and channel:
+                fp = self._dashboard_find_history_file_for_channel(channel)
+                if fp:
+                    src = {"type": "file", "path": fp, "series_idx": idx}
+
+            # 3) Status-sampled fallback
+            if src is None:
+                src = {"type": "status"}
+
+            sources[key] = src
+
+        self._dashboard_history_sources = sources
+
+    def _dashboard_pick_panel_for_channel(self, channel: str, panel_defs):
+        """Pick the best matching PanelDef for a channel token like 'A0' or 'E2'."""
+        token = re.escape(channel)
+        # token boundary: avoid matching A0 inside A01
+        patt = re.compile(rf"(?<![A-Za-z0-9]){token}(?![A-Za-z0-9])")
+
+        best = None
+        best_score = -10**9
+        for pd in panel_defs:
+            hay = f"{getattr(pd, 'panel_id', '')} {getattr(pd, 'label', '')}"
+            if not patt.search(hay):
+                continue
+
+            label = getattr(pd, "label", "") or ""
+            panel_id = getattr(pd, "panel_id", "") or ""
+            kind = getattr(pd, "kind", "") or ""
+
+            score = 0
+            if label == channel:
+                score += 100
+            elif label.startswith(channel):
+                score += 80
+            elif panel_id == channel:
+                score += 70
+            elif panel_id.startswith(channel):
+                score += 60
+            else:
+                score += 40
+
+            # Prefer kinds that naturally represent a single-channel history window
+            score += {"xy": 35, "xy_multi": 25, "matrix_rows": 20, "io_log": 10}.get(kind, 0)
+
+            # Prefer single-file sources (less ambiguous)
+            try:
+                if len(getattr(pd, "files", []) or []) == 1:
+                    score += 5
+            except Exception:
+                pass
+
+            if score > best_score:
+                best_score = score
+                best = pd
+
+        return best
+
+    def _dashboard_find_history_file_for_channel(self, channel: str):
+        """Heuristic fallback: find a history/log file for a channel under System_State_Files/."""
+        base = SYSTEM_STATE_DIR
+        if not os.path.isdir(base):
+            return None
+
+        import glob
+        # Keep the search small and biased toward likely names.
+        pats = [
+            os.path.join(base, "**", f"{channel}*.*"),
+            os.path.join(base, "**", f"*{channel}*.*"),
+        ]
+        candidates = []
+        for p in pats:
+            candidates.extend(glob.glob(p, recursive=True))
+
+        # Filter to SSV-like files first (but don't hard-fail if they aren't .ssv)
+        filtered = []
+        for c in candidates:
+            if not os.path.isfile(c):
+                continue
+            bn = os.path.basename(c).lower()
+            if bn in ("status.ssv", "control_panel.ssv", "update_flag.ssv"):
+                continue
+            if bn.endswith(".ssv") or bn.endswith(".cfg") or bn.endswith(".txt"):
+                filtered.append(c)
+
+        if not filtered:
+            return None
+
+        def _score(path):
+            bn = os.path.basename(path).lower()
+            score = 0
+            if bn.startswith(channel.lower()):
+                score += 20
+            if "hist" in bn or "history" in bn:
+                score += 30
+            if "window" in bn:
+                score += 25
+            if "log" in bn:
+                score += 15
+            # Prefer shallower paths (usually the canonical ones)
+            score -= path.count(os.sep)
+            return score
+
+        filtered.sort(key=lambda p: _score(p), reverse=True)
+        return filtered[0]
+
+    def _dashboard_load_history_series(self, kind, idx, max_points):
+        """Return (x, y) for the row history, preferring panel/file sources."""
+        src = (self._dashboard_history_sources or {}).get((kind, idx)) or {"type": "status"}
+
+        if src.get("type") == "panel":
+            pd = src.get("panel")
+            if pd is None:
+                return [], []
+            # Cache panel computations by file mtime signature to avoid re-reading large logs every second
+            pid = getattr(pd, 'panel_id', None) or str(id(pd))
+            try:
+                mt_sig = tuple(os.path.getmtime(p) if os.path.exists(p) else None for p in (getattr(pd, 'files', []) or []))
+            except Exception:
+                mt_sig = None
+
+            cached = None
+            try:
+                cached = (self._dashboard_panel_cache or {}).get(pid)
+            except Exception:
+                cached = None
+
+            if cached and cached.get('mt_sig') == mt_sig and cached.get('data') is not None:
+                data = cached.get('data')
+            else:
+                data = self._compute_panel_data(pd)
+                try:
+                    self._dashboard_panel_cache[pid] = {'mt_sig': mt_sig, 'data': data}
+                except Exception:
+                    pass
+            if not data or not data.get("x") or not data.get("series"):
+                return [], []
+
+            x = list(data["x"])
+            series = data["series"]
+
+            # Choose a single series
+            sidx = src.get("series_idx")
+            y = None
+            if isinstance(sidx, int) and 0 <= sidx < len(series):
+                y = series[sidx]
+            elif series:
+                y = series[0]
+            else:
+                y = []
+
+            # Ensure order oldest->newest
+            if len(x) >= 2 and x[0] > x[-1]:
+                x = list(reversed(x))
+                y = list(reversed(y))
+
+            if max_points and len(x) > max_points:
+                x = x[-max_points:]
+                y = y[-max_points:]
+            return x, y
+
+        if src.get("type") == "file":
+            path = src.get("path")
+            sidx = src.get("series_idx")
+            x, y = self._dashboard_load_series_from_file(path, max_points=max_points, series_idx=sidx)
+            return x, y
+
+        # status fallback: use in-GUI sampled history buffers
+        h = (self.dashboard_histories or {}).get((kind, idx))
+        if not h:
+            return [], []
+        return list(h.get("x", [])), list(h.get("y", []))
+
+    def _dashboard_load_series_from_file(self, path: str, max_points: int = 180, series_idx: int | None = None):
+        """Parse a numeric history/log file into (x, y).
+
+        Supported common forms:
+          - y-only: one float per line  -> x = [0..]
+          - xy:     two floats per line -> (x, y)
+          - io_log: tick v0 v1 v2 ...   -> choose v[series_idx]
+        """
+        if not path or not os.path.exists(path):
+            return [], []
+
+        try:
+            mtime = os.path.getmtime(path)
+        except Exception:
+            mtime = None
+
+        cache = self._dashboard_file_cache.get(path)
+        if cache and cache.get("mtime") == mtime and cache.get("parsed"):
+            parsed = cache["parsed"]
+        else:
+            parsed = None
+            # Try strict XY first (matches many Under-The-Hood series files)
+            xs, ys = load_ssv_xy(path)
+            if xs and ys:
+                parsed = {"mode": "xy", "x": xs, "y": ys}
+            else:
+                # Generic numeric-row parser
+                from collections import deque
+                keep = max_points if (isinstance(max_points, int) and max_points > 0) else 2000
+                rows = deque(maxlen=max(keep, 50))
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            if line.startswith("#") or line.startswith("//"):
+                                continue
+                            line = line.replace(";", " ")
+                            parts = line.split()
+                            nums = []
+                            ok = True
+                            for p in parts:
+                                try:
+                                    nums.append(float(p))
+                                except ValueError:
+                                    ok = False
+                                    break
+                            if ok and nums:
+                                rows.append(nums)
+                except Exception:
+                    rows = deque()
+
+                rows = list(rows)
+                if not rows:
+                    parsed = {"mode": "none"}
+                else:
+                    # Determine the most common row length
+                    lens = {}
+                    for r in rows:
+                        lens[len(r)] = lens.get(len(r), 0) + 1
+                    row_len = max(lens.items(), key=lambda kv: kv[1])[0]
+
+                    rows = [r for r in rows if len(r) == row_len]
+                    if not rows:
+                        parsed = {"mode": "none"}
+                    elif row_len == 1:
+                        y = [r[0] for r in rows]
+                        x = list(range(len(y)))
+                        parsed = {"mode": "y", "x": x, "y": y}
+                    elif row_len == 2:
+                        x = [r[0] for r in rows]
+                        y = [r[1] for r in rows]
+                        parsed = {"mode": "xy", "x": x, "y": y}
+                    else:
+                        # tick + N channels
+                        ticks = [r[0] for r in rows]
+                        n = row_len - 1
+                        series = [[] for _ in range(n)]
+                        for r in rows:
+                            for i in range(n):
+                                series[i].append(r[i + 1])
+                        parsed = {"mode": "io_log", "x": ticks, "series": series}
+
+            self._dashboard_file_cache[path] = {"mtime": mtime, "parsed": parsed}
+
+        mode = (parsed or {}).get("mode")
+        if mode == "xy":
+            x = list(parsed.get("x", []))
+            y = list(parsed.get("y", []))
+        elif mode == "y":
+            x = list(parsed.get("x", []))
+            y = list(parsed.get("y", []))
+        elif mode == "io_log":
+            x = list(parsed.get("x", []))
+            series = parsed.get("series", []) or []
+            col = 0
+            if isinstance(series_idx, int) and 0 <= series_idx < len(series):
+                col = series_idx
+            y = list(series[col]) if series else []
+        else:
+            return [], []
+
+        # Ensure oldest->newest order
+        if len(x) >= 2 and x[0] > x[-1]:
+            x = list(reversed(x))
+            y = list(reversed(y))
+
+        # Trim
+        if isinstance(max_points, int) and max_points > 0 and len(x) > max_points:
+            x = x[-max_points:]
+            y = y[-max_points:]
+
+        return x, y
+
+    def _dashboard_ensure_rows(self, slots):
+        """Build row widgets if the slot definitions changed."""
+        sig = [(k, i, (ent.get("desc") if isinstance(ent, dict) else str(ent))) for (k, i, ent) in slots]
+        if sig == self._dashboard_row_defs and self.dash_row_widgets:
+            return
+
+        # clear existing
+        for child in list(self.dash_rows_container.winfo_children()):
+            child.destroy()
+        self.dash_row_widgets = {}
+        self._dashboard_row_defs = sig
+
+        for r, (kind, idx, ent) in enumerate(slots):
+            desc = ent.get("desc", f"{kind}{idx}") if isinstance(ent, dict) else str(ent)
+            idx_lbl = f"{kind}{idx}" if isinstance(idx, int) and idx >= 0 else f"{kind}?"
+            label_txt = f"{idx_lbl} — {desc}"
+
+            row = ttk.Frame(self.dash_rows_container, relief="ridge", padding=6)
+            row.grid(row=r, column=0, sticky="ew", padx=4, pady=4)
+            row.columnconfigure(0, weight=1)
+
+            # left: label + plot
+            left = ttk.Frame(row)
+            left.grid(row=0, column=0, sticky="nsew")
+            left.columnconfigure(1, weight=1)
+
+            name_lbl = ttk.Label(left, text=label_txt)
+            name_lbl.grid(row=0, column=0, sticky="w")
+
+            val_var = tk.StringVar(value="")
+            val_lbl = ttk.Label(left, textvariable=val_var)
+            val_lbl.grid(row=0, column=1, sticky="e", padx=(10, 0))
+
+            plot = MiniPlotCanvas(left, width=520, height=90)
+            plot.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+
+            # middle: goal + low/high
+            mid = ttk.Frame(row)
+            mid.grid(row=0, column=1, sticky="ns", padx=(12, 0))
+            ttk.Label(mid, text="Goal").grid(row=0, column=0, sticky="w")
+
+            goal_led = LedIndicator(mid, size=14, on_color="#15a44a")
+            goal_led.grid(row=0, column=1, padx=6)
+
+            goal_val_var = tk.StringVar(value="")
+            ttk.Label(mid, textvariable=goal_val_var).grid(row=0, column=2, sticky="w")
+
+            # low/high indicators
+            ttk.Label(mid, text="Low").grid(row=1, column=0, sticky="w", pady=(6, 0))
+            low_led = LedIndicator(mid, size=14, on_color="#15a44a")
+            low_led.grid(row=1, column=1, padx=6, pady=(6, 0))
+
+            ttk.Label(mid, text="High").grid(row=1, column=2, sticky="w", pady=(6, 0))
+            high_led = LedIndicator(mid, size=14, on_color="#15a44a")
+            high_led.grid(row=1, column=3, padx=6, pady=(6, 0))
+
+            # right: output state
+            right = ttk.Frame(row)
+            right.grid(row=0, column=2, sticky="ns", padx=(12, 0))
+            ttk.Label(right, text="Output").grid(row=0, column=0, sticky="w")
+
+            out_led = LedIndicator(right, size=14, on_color="#d11f1f")
+            out_led.grid(row=0, column=1, padx=6)
+
+            out_var = tk.StringVar(value="")
+            ttk.Label(right, textvariable=out_var).grid(row=0, column=2, sticky="w")
+
+            self.dash_row_widgets[(kind, idx)] = {
+                "label": name_lbl,
+                "value_var": val_var,
+                "plot": plot,
+                "goal_led": goal_led,
+                "goal_val_var": goal_val_var,
+                "low_led": low_led,
+                "high_led": high_led,
+                "out_led": out_led,
+                "out_var": out_var,
+                "ent": ent,
+            }
+
+        # Resolve history sources whenever rows are rebuilt (keeps the dashboard tied to Under-The-Hood data sources)
+        try:
+            self._dashboard_resolve_history_sources(slots)
+        except Exception:
+            pass
+
+        self.dash_rows_container.columnconfigure(0, weight=1)
+
+    def _dashboard_refresh_from_status(self, engine, afferents, efferents):
+        # choose slot source (pinout order mapped onto status indices when possible)
+        slots = self._dashboard_get_slots(afferents, efferents)
+        self._dashboard_ensure_rows(slots)
+
+        # stamp the dashboard refresh time so users can confirm updates even on flat signals
+        try:
+            import time
+            if hasattr(self, "dash_update_var"):
+                self.dash_update_var.set(time.strftime("| Dashboard: %H:%M:%S"))
+        except Exception:
+            pass
+
+        # x-axis sample index for status-sampled fallback history buffers
+        x_now = float(self._dashboard_sample_counter)
+        self._dashboard_sample_counter += 1.0
+
+        # desired points shown (0 = unlimited)
+        try:
+            max_points = int(self.dashboard_history_points_var.get())
+        except Exception:
+            max_points = 180
+        if max_points < 0:
+            max_points = 0
+
+        def _hist_for(key):
+            h = self.dashboard_histories.get(key)
+            if h is None:
+                from collections import deque
+                h = {
+                    "x": deque(maxlen=(max_points if max_points else None)),
+                    "y": deque(maxlen=(max_points if max_points else None)),
+                }
+                self.dashboard_histories[key] = h
+            else:
+                # update maxlen if user changed it
+                if max_points:
+                    if h["x"].maxlen != max_points:
+                        from collections import deque
+                        h["x"] = deque(h["x"], maxlen=max_points)
+                        h["y"] = deque(h["y"], maxlen=max_points)
+                else:
+                    if h["x"].maxlen is not None:
+                        from collections import deque
+                        h["x"] = deque(h["x"], maxlen=None)
+                        h["y"] = deque(h["y"], maxlen=None)
+            return h
+
+        def _fmt(v):
+            try:
+                v = float(v)
+            except Exception:
+                return str(v)
+            av = abs(v)
+            if av >= 1000:
+                return f"{v:.0f}"
+            if av >= 100:
+                return f"{v:.1f}"
+            if av >= 10:
+                return f"{v:.2f}"
+            if av >= 1:
+                return f"{v:.3f}"
+            return f"{v:.4f}"
+
+        for kind, idx, ent in slots:
+            w = self.dash_row_widgets.get((kind, idx))
+            if not w:
+                continue
+
+            # Pull current instantaneous value/goal from status.ssv (for LEDs/text)
+            val = None
+            goal = None
+            if kind == "A":
+                d = afferents.get(idx, {}) if isinstance(afferents, dict) else {}
+                val = d.get("Value")
+                goal = d.get("Goal")
+            else:
+                d = efferents.get(idx, {}) if isinstance(efferents, dict) else {}
+                val = d.get("Value")
+
+            # Update GUI-side fallback buffers from instantaneous status values.
+            # Even when file-based plotting is active, keeping these buffers updated gives a robust fallback.
+            key = (kind, idx)
+            h = _hist_for(key)
+            if isinstance(val, (int, float)):
+                h["x"].append(float(x_now))
+                h["y"].append(float(val))
+            else:
+                h["x"].append(float(x_now))
+                h["y"].append(math.nan)
+
+            # Pick the plotted history from the preferred source (panel/file), falling back to the GUI buffer
+            try:
+                x_list, y_list = self._dashboard_load_history_series(kind, idx, max_points)
+            except Exception:
+                x_list, y_list = [], []
+
+            if not x_list or not y_list:
+                x_list = list(h.get("x", []))
+                y_list = list(h.get("y", []))
+
+            # Labels / display strings
+            desc = ""
+            if isinstance(ent, dict):
+                desc = ent.get("desc", "")
+            idx_lbl = f"{kind}{idx}" if isinstance(idx, int) and idx >= 0 else f"{kind}?"
+            title = f"{idx_lbl} — {desc}" if desc else idx_lbl
+
+            # right-aligned current value text
+            if isinstance(val, (int, float)):
+                w["value_var"].set(_fmt(val))
+            elif val is None:
+                w["value_var"].set("")
+            else:
+                w["value_var"].set(str(val))
+
+            # Goal indicators (afferents only)
+            has_goal = isinstance(goal, (int, float))
+            w["goal_led"].set_state(bool(has_goal))
+            w["goal_val_var"].set(_fmt(goal) if has_goal else "")
+
+            # Low/high logic: only meaningful if we have both val and goal
+            low_on = False
+            high_on = False
+            if has_goal and isinstance(val, (int, float)):
+                low_on = (val < goal)
+                high_on = (val > goal)
+            w["low_led"].set_state(low_on)
+            w["high_led"].set_state(high_on)
+
+            # Output state (efferents)
+            out_on = False
+            if kind == "E" and isinstance(val, (int, float)):
+                out_on = (val != 0.0)
+            w["out_led"].set_state(out_on)
+            w["out_var"].set("ON" if out_on else "")
+
+            # Plot
+            try:
+                w["plot"].plot(
+                    x_list, y_list,
+                    title=title,
+                    goal=(goal if has_goal else None),
+                    x_hint="oldest → newest"
+                )
+            except Exception:
+                pass
+
+
+
     def refresh_summary(self):
         engine, afferents, efferents = parse_status_struct(STATUS_FILE)
+
+
+        # Dashboard (history graphs / goals / outputs)
+        if hasattr(self, "dash_row_widgets"):
+            try:
+                self._dashboard_refresh_from_status(engine, afferents, efferents)
+            except Exception as e:
+                # Surface errors instead of silently failing (silent failures look like "no updates").
+                try:
+                    import traceback
+                    traceback.print_exc()
+                except Exception:
+                    pass
+                if hasattr(self, "status_var"):
+                    self.status_var.set(f"Dashboard update error: {e}")
 
         # Engine state
         session_tick = engine.get("Session_Tick")
@@ -1091,22 +2120,26 @@ class GaiaConfigUI(tk.Tk):
         self._last_session_tick = session_tick if session_tick is not None else self._last_session_tick
 
         if isinstance(run_update, (int, float)):
-            if run_update:
-                state_text += " | Updates: ON"
-            else:
-                state_text += " | Updates: OFF"
+            state_text += " | Updates: ON" if run_update else " | Updates: OFF"
 
         if isinstance(exit_flag, (int, float)) and exit_flag:
             state_text += " | EXIT requested"
 
-        self.summary_engine_label.config(text=state_text)
+        # dashboard header (if built)
+        if hasattr(self, "dash_engine_var"):
+            self.dash_engine_var.set(state_text)
 
-        self.summary_tick_label.config(
-            text=f"Session tick: {session_tick if session_tick is not None else '-'}"
-        )
-        self.summary_proc_label.config(
-            text=f"Processor tick: {proc_tick if proc_tick is not None else '-'}"
-        )
+        # tables header (if built)
+        if hasattr(self, "summary_engine_label"):
+            self.summary_engine_label.config(text=state_text)
+        if hasattr(self, "summary_tick_label"):
+            self.summary_tick_label.config(
+                text=f"Session tick: {session_tick if session_tick is not None else '-'}"
+            )
+        if hasattr(self, "summary_proc_label"):
+            self.summary_proc_label.config(
+                text=f"Processor tick: {proc_tick if proc_tick is not None else '-'}"
+            )
 
         # Boredom from status file (NT4 Bored X)
         boredom_text = "Engagement: unknown"
@@ -1123,50 +2156,61 @@ class GaiaConfigUI(tk.Tk):
                         except Exception:
                             bored_val = None
                         if bored_val is not None:
-                            if bored_val >= 0.5:
-                                boredom_text = "Engagement: BORED"
-                            else:
-                                boredom_text = "Engagement: exploring"
+                            boredom_text = "Engagement: BORED" if bored_val >= 0.5 else "Engagement: exploring"
                         break
         except FileNotFoundError:
             boredom_text = "Engagement: (no status file)"
-        self.summary_boredom_label.config(text=boredom_text)
 
-        # Afferent table
-        self.summary_aff_tree.delete(*self.summary_aff_tree.get_children())
-        for idx in sorted(afferents.keys()):
-            d = afferents[idx]
-            val = d.get("Value", "")
-            goal = d.get("Goal", "")
-            dev = d.get("Dev", "")
-            self.summary_aff_tree.insert(
-                "", tk.END,
-                values=(f"A{idx}", val, goal, dev)
-            )
+        if hasattr(self, "summary_boredom_label"):
+            self.summary_boredom_label.config(text=boredom_text)
 
-        # Efferent table
-        self.summary_eff_tree.delete(*self.summary_eff_tree.get_children())
-        for idx in sorted(efferents.keys()):
-            d = efferents[idx]
-            val = d.get("Value", "")
-            self.summary_eff_tree.insert(
-                "", tk.END,
-                values=(f"E{idx}", val)
-            )
+        # Update tables (if present)
+        if hasattr(self, "summary_aff_tree"):
+            self.summary_aff_tree.delete(*self.summary_aff_tree.get_children())
+            for idx in sorted(afferents.keys()):
+                d = afferents[idx]
+                val = d.get("Value", "")
+                goal = d.get("Goal", "")
+                dev = d.get("Dev", "")
+                self.summary_aff_tree.insert("", tk.END, values=(f"A{idx}", val, goal, dev))
+
+        if hasattr(self, "summary_eff_tree"):
+            self.summary_eff_tree.delete(*self.summary_eff_tree.get_children())
+            for idx in sorted(efferents.keys()):
+                d = efferents[idx]
+                val = d.get("Value", "")
+                self.summary_eff_tree.insert("", tk.END, values=(f"E{idx}", val))
+
 
         self.status_var.set("Summary / Goals updated.")
 
+
     def on_summary_auto_toggle(self):
+        # Ensure only one timer is running
         if self.summary_auto_var.get():
-            self._schedule_summary_refresh()
+            if self._summary_after_id is None:
+                self._schedule_summary_refresh()
+        else:
+            if self._summary_after_id is not None:
+                try:
+                    self.after_cancel(self._summary_after_id)
+                except Exception:
+                    pass
+                self._summary_after_id = None
+
 
     def _schedule_summary_refresh(self):
         if not self.summary_auto_var.get():
+            self._summary_after_id = None
             return
-        self.refresh_summary()
-        self.after(1000, self._schedule_summary_refresh)
 
-    # --- I/O tab -----------------------------------------------------------
+        # pull latest status + extend history + redraw dashboard
+        self.refresh_summary()
+
+        # reschedule
+        self._summary_after_id = self.after(1000, self._schedule_summary_refresh)
+
+
     def _get_selected_io_path(self):
         """Return the file path for the currently selected I/O row, or None."""
         sel = self.io_tree.selection()

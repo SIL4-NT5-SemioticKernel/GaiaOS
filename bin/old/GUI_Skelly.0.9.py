@@ -78,6 +78,65 @@ def touch_flag(path: str, value: str = "1\n") -> bool:
         messagebox.showerror("Flag Error", f"Failed to write flag {path}:\n{e}")
         return False
 
+
+def _format_ssv_number(v):
+    """Format numbers compactly for .ssv writes."""
+    try:
+        fv = float(v)
+    except Exception:
+        return "0"
+    if math.isfinite(fv) and abs(fv - round(fv)) < 1e-12:
+        return str(int(round(fv)))
+    return f"{fv:g}"
+
+def write_ssv_matrix(path: str, matrix, header_comment: str = None) -> None:
+    """
+    Write a whitespace-separated numeric matrix to `path` atomically.
+    Preserves leading comment lines (# or //) already present in the file,
+    unless `header_comment` is explicitly provided.
+    """
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+    leading = []
+    if header_comment is not None:
+        if header_comment:
+            for line in header_comment.splitlines():
+                leading.append(f"# {line}".rstrip() + "\n")
+    else:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for raw in f:
+                    s = raw.strip()
+                    if not s:
+                        break
+                    if s.startswith("#") or s.startswith("//"):
+                        leading.append(raw if raw.endswith("\n") else raw + "\n")
+                    else:
+                        break
+        except FileNotFoundError:
+            pass
+        except Exception:
+            # If we can't read safely, just don't preserve.
+            leading = []
+
+    body_lines = []
+    for row in (matrix or []):
+        if row is None:
+            body_lines.append("\n")
+            continue
+        nums = [_format_ssv_number(v) for v in row]
+        body_lines.append(" ".join(nums).rstrip() + "\n")
+
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        for l in leading:
+            f.write(l)
+        for l in body_lines:
+            f.write(l)
+    os.replace(tmp, path)
+
 # ---------------------------------------------------------------------------
 # Status parsing helpers
 # ---------------------------------------------------------------------------
@@ -459,6 +518,145 @@ class LinePlotCanvas(tk.Canvas):
             y_offset += 12
 
 # ---------------------------------------------------------------------------
+# Small widgets for the System Readout Panel tab
+# ---------------------------------------------------------------------------
+
+class LampCanvas(tk.Canvas):
+    """A tiny indicator lamp: grey (off) / green (on)."""
+    def __init__(self, master, diameter=16, **kwargs):
+        w = diameter + 4
+        h = diameter + 4
+        super().__init__(
+            master,
+            width=w,
+            height=h,
+            bg=kwargs.pop("bg", master.cget("background") if hasattr(master, "cget") else "SystemButtonFace"),
+            highlightthickness=0,
+            **kwargs,
+        )
+        self._diameter = diameter
+        self._circle = self.create_oval(2, 2, 2 + diameter, 2 + diameter, outline="black", fill="#777777")
+
+    def set(self, on: bool):
+        self.itemconfig(self._circle, fill="#2ecc71" if on else "#777777")
+
+
+class VerticalGaugeCanvas(tk.Canvas):
+    """A small vertical gauge with a red marker (value normalized 0..1)."""
+    def __init__(self, master, width=26, height=70, grid_cols=6, grid_rows=12, **kwargs):
+        super().__init__(
+            master,
+            width=width,
+            height=height,
+            bg="white",
+            highlightthickness=1,
+            highlightbackground="black",
+            **kwargs,
+        )
+        self._width = width
+        self._height = height
+        self._grid_cols = max(2, int(grid_cols))
+        self._grid_rows = max(2, int(grid_rows))
+        self._marker = None
+        self._draw_grid()
+
+    def _draw_grid(self):
+        self.delete("grid")
+        # light grid
+        for i in range(1, self._grid_cols):
+            x = i * self._width / self._grid_cols
+            self.create_line(x, 0, x, self._heighteight, fill="#d0d0d0", tags="grid")
+        for j in range(1, self._grid_rows):
+            y = j * self._height / self._grid_rows
+            self.create_line(0, y, self._width, y, fill="#d0d0d0", tags="grid")
+
+    def set(self, value01: float):
+        try:
+            v = float(value01)
+        except Exception:
+            v = 0.0
+        if not math.isfinite(v):
+            v = 0.0
+        v = max(0.0, min(1.0, v))
+        y = (1.0 - v) * (self._height - 1)
+        # draw a short horizontal marker
+        if self._marker is None:
+            self._marker = self.create_line(2, y, self._width - 2, y, fill="red", width=3)
+        else:
+            self.coords(self._marker, 2, y, self._width - 2, y)
+
+
+class MiniTrendCanvas(tk.Canvas):
+    """A small gridded trend plot (single series, red trace)."""
+    def __init__(self, master, width=320, height=70, grid_cols=24, grid_rows=10, **kwargs):
+        super().__init__(
+            master,
+            width=width,
+            height=height,
+            bg="white",
+            highlightthickness=1,
+            highlightbackground="black",
+            **kwargs,
+        )
+        self._width = width
+        self._height = height
+        self._grid_cols = max(4, int(grid_cols))
+        self._grid_rows = max(4, int(grid_rows))
+        self._trace = None
+        self._draw_grid()
+
+    def _draw_grid(self):
+        self.delete("grid")
+        for i in range(1, self._grid_cols):
+            x = i * self._width / self._grid_cols
+            self.create_line(x, 0, x, self._heighteight, fill="#d0d0d0", tags="grid")
+        for j in range(1, self._grid_rows):
+            y = j * self._height / self._grid_rows
+            self.create_line(0, y, self._width, y, fill="#d0d0d0", tags="grid")
+
+    def plot(self, values):
+        # values: list[float|None]
+        vals = [v for v in (values or []) if v is not None]
+        if len(vals) < 2:
+            if self._trace is not None:
+                self.delete(self._trace)
+                self._trace = None
+            return
+
+        vmin = min(vals)
+        vmax = max(vals)
+        if vmax == vmin:
+            vmax = vmin + 1.0
+
+        # x is index
+        n = len(values)
+        if n < 2:
+            return
+
+        def to_screen(i, v):
+            x = i * (self._width - 1) / max(1, (n - 1))
+            y = (1.0 - ((v - vmin) / (vmax - vmin))) * (self._height - 1)
+            return x, y
+
+        pts = []
+        for i, v in enumerate(values):
+            if v is None:
+                continue
+            x, y = to_screen(i, v)
+            pts.extend([x, y])
+
+        if len(pts) < 4:
+            if self._trace is not None:
+                self.delete(self._trace)
+                self._trace = None
+            return
+
+        if self._trace is None:
+            self._trace = self.create_line(pts, fill="red", width=3)
+        else:
+            self.coords(self._trace, *pts)
+
+# ---------------------------------------------------------------------------
 # Main UI
 # ---------------------------------------------------------------------------
 
@@ -487,12 +685,36 @@ class GaiaConfigUI(tk.Tk):
         self.ssv_dir_label_var = tk.StringVar(
             value=f"Directory: {os.path.abspath(self.current_ssv_dir)}"
         )
-        
-        # panel defs for Under-The-Hood
-        self.panel_defs          = load_panel_defs(SKELLY_PANELS_FILE)
+
+        # panel defs for Under-The-Hood plots + System Readout Panels
+        self._panels_mtime = os.path.getmtime(SKELLY_PANELS_FILE) if os.path.exists(SKELLY_PANELS_FILE) else None
+        self.panel_defs = load_panel_defs(SKELLY_PANELS_FILE)
         self.panel_defs_by_label = {p.label: p for p in self.panel_defs}
-        self.underhood_panel_var = tk.StringVar(value=self.panel_defs[0].label if self.panel_defs else "")
-        
+        self.panel_defs_by_id = {p.panel_id: p for p in self.panel_defs}
+
+        # Kinds that can be drawn on the Under-The-Hood line plot canvas
+        self._plot_kinds = {"io_log", "matrix_rows", "xy", "xy_multi"}
+
+        self.underhood_panel_defs = [p for p in self.panel_defs if p.kind in self._plot_kinds]
+        self.underhood_defs_by_label = {p.label: p for p in self.underhood_panel_defs}
+        self.underhood_panel_var = tk.StringVar(value=self.underhood_panel_defs[0].label if self.underhood_panel_defs else "")
+
+        # System Readout Panels are defined in Skelly_Panels.ssv via kind == "readout".
+        # The 'files' field is interpreted as a comma-separated list of panel_ids
+        # that already exist in Skelly_Panels.ssv.
+        self.readout_panel_defs = [p for p in self.panel_defs if p.kind == "readout"]
+        self.readout_defs_by_label = {p.label: p for p in self.readout_panel_defs}
+        self.readout_panel_var = tk.StringVar(value=self.readout_panel_defs[0].label if self.readout_panel_defs else "")
+        self.readout_auto_var = tk.BooleanVar(value=False)
+
+        # Readout "setpoint" editing state (writes into the goal matrix, when available)
+        self.readout_channel_var = tk.IntVar(value=0)     # 0-based row index
+        self.readout_step_var = tk.DoubleVar(value=1.0)
+        self.readout_setpoint_var = tk.DoubleVar(value=0.0)
+
+        self._readout_goal_path = None
+        self._readout_goal_matrix = None
+        self._readout_goal_row_count = 0
         # --- scripts tab state ---
         self.current_script_path = None
         self.scripts_combo_var   = tk.StringVar()
@@ -528,6 +750,7 @@ class GaiaConfigUI(tk.Tk):
         self.scripts_frame    = ttk.Frame(self.nb)   # NEW
         self.status_frame     = ttk.Frame(self.nb)
         self.underhood_frame  = ttk.Frame(self.nb)
+        self.readout_frame    = ttk.Frame(self.nb)
 
         # Order: put Status/Goals first as the friendly front tab
         self.nb.add(self.summary_frame,   text="Status / Goals")
@@ -535,6 +758,7 @@ class GaiaConfigUI(tk.Tk):
         self.nb.add(self.ssv_frame,       text="SSV Files")
         self.nb.add(self.scripts_frame,   text="Scripts")       # NEW
         self.nb.add(self.underhood_frame, text="Under The Hood")
+        self.nb.add(self.readout_frame,    text="System Readout Panel")
         self.nb.add(self.ctrl_frame,      text="Control Panel")
         self.nb.add(self.autoexec_frame,  text="Autoexec")
         self.nb.add(self.onion_frame,     text="Onion Snapshot")
@@ -549,6 +773,7 @@ class GaiaConfigUI(tk.Tk):
         self._build_scripts_tab()     # NEW
         self._build_status_tab()
         self._build_underhood_tab()
+        self._build_readout_tab()
 
         # Status bar
         status = ttk.Label(self, textvariable=self.status_var, anchor="w")
@@ -1685,7 +1910,489 @@ class GaiaConfigUI(tk.Tk):
         self.refresh_status()
         self.after(1000, self._schedule_status_refresh)
 
-    # --- Under-The-Hood tab -----------------------------------------------
+    # --- System Readout Panel tab ------------------------------------------
+
+    def _reload_panel_defs_if_changed(self):
+        """Reload Skelly_Panels.ssv if it changed on disk, and update dropdowns."""
+        try:
+            mtime = os.path.getmtime(SKELLY_PANELS_FILE) if os.path.exists(SKELLY_PANELS_FILE) else None
+        except Exception:
+            mtime = None
+
+        if mtime == self._panels_mtime:
+            return False
+
+        self._panels_mtime = mtime
+        self.panel_defs = load_panel_defs(SKELLY_PANELS_FILE)
+        self.panel_defs_by_label = {p.label: p for p in self.panel_defs}
+        self.panel_defs_by_id = {p.panel_id: p for p in self.panel_defs}
+
+        self.underhood_panel_defs = [p for p in self.panel_defs if p.kind in self._plot_kinds]
+        self.underhood_defs_by_label = {p.label: p for p in self.underhood_panel_defs}
+
+        self.readout_panel_defs = [p for p in self.panel_defs if p.kind == "readout"]
+        self.readout_defs_by_label = {p.label: p for p in self.readout_panel_defs}
+
+        # Update Under-The-Hood dropdown (if already built)
+        if hasattr(self, "underhood_combo"):
+            labels = [p.label for p in self.underhood_panel_defs]
+            self.underhood_combo.config(values=labels)
+            if labels and self.underhood_panel_var.get() not in labels:
+                self.underhood_panel_var.set(labels[0])
+            if not labels:
+                self.underhood_panel_var.set("")
+
+        # Update Readout dropdown (if already built)
+        if hasattr(self, "readout_combo"):
+            labels = [p.label for p in self.readout_panel_defs]
+            self.readout_combo.config(values=labels)
+            if labels and self.readout_panel_var.get() not in labels:
+                self.readout_panel_var.set(labels[0])
+            if not labels:
+                self.readout_panel_var.set("")
+
+        return True
+
+    def _build_readout_tab(self):
+        top = ttk.Frame(self.readout_frame)
+        top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        ctrl = ttk.Frame(top)
+        ctrl.pack(fill=tk.X, pady=(0, 5))
+
+        ttk.Label(ctrl, text="Readout:").pack(side=tk.LEFT)
+
+        self.readout_combo = ttk.Combobox(
+            ctrl,
+            textvariable=self.readout_panel_var,
+            state="readonly",
+            values=[p.label for p in self.readout_panel_defs] if self.readout_panel_defs else [],
+            width=30,
+        )
+        self.readout_combo.pack(side=tk.LEFT, padx=5)
+        self.readout_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_readout())
+
+        ttk.Button(ctrl, text="Refresh", command=self.refresh_readout).pack(side=tk.LEFT, padx=5)
+
+        auto_chk = ttk.Checkbutton(
+            ctrl,
+            text="Auto-refresh",
+            variable=self.readout_auto_var,
+            command=self.on_readout_auto_toggle,
+        )
+        auto_chk.pack(side=tk.LEFT, padx=10)
+
+        self.readout_notice = ttk.Label(top, text="", foreground="darkred")
+        self.readout_notice.pack(anchor="w", pady=(0, 5))
+
+        body = ttk.Frame(top)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        # Left: 3 trend plots
+        left = ttk.Frame(body)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+
+        self.readout_plot_labels = []
+        self.readout_trends = []
+        for i in range(3):
+            row = ttk.Frame(left)
+            row.pack(fill=tk.X, pady=4)
+            lbl = ttk.Label(row, text=f"Channel {i}")
+            lbl.pack(side=tk.LEFT, padx=(0, 8))
+            c = MiniTrendCanvas(row, width=380, height=80)
+            c.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            self.readout_plot_labels.append(lbl)
+            self.readout_trends.append(c)
+
+        # Middle: goals + gauges + low/high indicators
+        mid = ttk.Frame(body)
+        mid.grid(row=0, column=1, sticky="nsew", padx=(0, 10))
+
+        self.readout_goal_lamps = []
+        self.readout_goal_gauges = []
+        self.readout_low_lamps = []
+        self.readout_high_lamps = []
+
+        for i in range(3):
+            r = ttk.Frame(mid)
+            r.pack(fill=tk.X, pady=6)
+
+            ttk.Label(r, text="Goal").pack(side=tk.LEFT, padx=(0, 4))
+            lamp = LampCanvas(r)
+            lamp.pack(side=tk.LEFT, padx=(0, 8))
+            gauge = VerticalGaugeCanvas(r, width=26, height=70)
+            gauge.pack(side=tk.LEFT, padx=(0, 16))
+
+            ttk.Label(r, text="Low").pack(side=tk.LEFT, padx=(0, 4))
+            low = LampCanvas(r)
+            low.pack(side=tk.LEFT, padx=(0, 12))
+
+            ttk.Label(r, text="High").pack(side=tk.LEFT, padx=(0, 4))
+            high = LampCanvas(r)
+            high.pack(side=tk.LEFT)
+
+            self.readout_goal_lamps.append(lamp)
+            self.readout_goal_gauges.append(gauge)
+            self.readout_low_lamps.append(low)
+            self.readout_high_lamps.append(high)
+
+        # Right: outputs
+        right = ttk.Frame(body)
+        right.grid(row=0, column=2, sticky="nsew")
+
+        self.readout_output_labels = []
+        self.readout_output_gauges = []
+        for i in range(3):
+            r = ttk.Frame(right)
+            r.pack(fill=tk.X, pady=6)
+            lbl = ttk.Label(r, text="Output: --", width=14)
+            lbl.pack(side=tk.LEFT, padx=(0, 8))
+            gauge = VerticalGaugeCanvas(r, width=26, height=70)
+            gauge.pack(side=tk.LEFT)
+            self.readout_output_labels.append(lbl)
+            self.readout_output_gauges.append(gauge)
+
+        body.rowconfigure(0, weight=1)
+        body.columnconfigure(0, weight=2)
+        body.columnconfigure(1, weight=1)
+        body.columnconfigure(2, weight=1)
+
+        # Setpoint + update controls
+        edit = ttk.LabelFrame(top, text="Setpoint / Update")
+        edit.pack(fill=tk.X, pady=(10, 0))
+
+        ttk.Label(edit, text="Channel (row):").pack(side=tk.LEFT, padx=(8, 4))
+        ch_spin = ttk.Spinbox(edit, from_=0, to=99, textvariable=self.readout_channel_var, width=4, command=self._on_readout_channel_change)
+        ch_spin.pack(side=tk.LEFT, padx=(0, 12))
+
+        ttk.Label(edit, text="Step:").pack(side=tk.LEFT)
+        step_spin = ttk.Spinbox(edit, from_=-1e9, to=1e9, increment=0.1, textvariable=self.readout_step_var, width=8)
+        step_spin.pack(side=tk.LEFT, padx=(4, 12))
+
+        ttk.Button(edit, text="−", width=3, command=self.readout_dec).pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Button(edit, text="+", width=3, command=self.readout_inc).pack(side=tk.LEFT, padx=(0, 8))
+
+        ttk.Label(edit, text="Value:").pack(side=tk.LEFT)
+        self.readout_setpoint_entry = ttk.Entry(edit, textvariable=self.readout_setpoint_var, width=12)
+        self.readout_setpoint_entry.pack(side=tk.LEFT, padx=(4, 8))
+
+        ttk.Button(edit, text="Set", command=self.readout_set_goal).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(edit, text="Trigger update + refresh", command=self.readout_trigger_update_and_refresh).pack(side=tk.LEFT)
+
+        self.readout_goal_path_label = ttk.Label(edit, text="", foreground="#555555")
+        self.readout_goal_path_label.pack(side=tk.LEFT, padx=(12, 0))
+
+        # Initial paint
+        self.refresh_readout()
+
+    def _on_readout_channel_change(self):
+        """When channel changes, preload the current goal value into the setpoint box (when possible)."""
+        try:
+            idx = int(self.readout_channel_var.get())
+        except Exception:
+            return
+        if self._readout_goal_matrix is None:
+            return
+        if idx < 0 or idx >= len(self._readout_goal_matrix):
+            return
+        row = self._readout_goal_matrix[idx] if self._readout_goal_matrix else []
+        if not row:
+            return
+        # Only overwrite user input if the entry isn't focused
+        if self.focus_get() is self.readout_setpoint_entry:
+            return
+        try:
+            self.readout_setpoint_var.set(float(row[-1]))
+        except Exception:
+            pass
+
+    def _last_non_none(self, seq):
+        for v in reversed(seq or []):
+            if v is not None:
+                return v
+        return None
+
+    def _extract_limits(self, limit_matrix, rows=3):
+        """
+        Heuristic: accept either:
+        - 2*rows lines: low0, high0, low1, high1, ...
+        - rows lines with at least 2 values: [low, high, ...]
+        Returns list[(low, high)] of length rows (items may be (None,None)).
+        """
+        out = [(None, None) for _ in range(rows)]
+        if not limit_matrix:
+            return out
+        if len(limit_matrix) >= 2 * rows:
+            for i in range(rows):
+                lo = self._last_non_none(limit_matrix[2 * i])
+                hi = self._last_non_none(limit_matrix[2 * i + 1])
+                out[i] = (lo, hi)
+            return out
+        if len(limit_matrix) >= rows:
+            for i in range(rows):
+                row = limit_matrix[i]
+                if row and len(row) >= 2:
+                    out[i] = (row[0], row[1])
+            return out
+        return out
+
+    def refresh_readout(self):
+        self._reload_panel_defs_if_changed()
+
+        if not self.readout_panel_defs:
+            self.readout_notice.config(
+                text=(
+                    "No readout panels defined. Add lines to Skelly_Panels.ssv like:\n"
+                    "  my_readout ; Climate Readout ; readout ; temp_hist,heater_hist,cooler_hist,goals,limits,outputs"
+                )
+            )
+            return
+
+        self.readout_notice.config(text="")
+
+        label = self.readout_panel_var.get()
+        readout_def = self.readout_defs_by_label.get(label)
+        if readout_def is None:
+            readout_def = self.readout_panel_defs[0]
+            self.readout_panel_var.set(readout_def.label)
+
+        panel_ids = list(readout_def.files or [])
+        if len(panel_ids) < 3:
+            self.readout_notice.config(text=f"Readout definition {readout_def.label!r} needs at least 3 panel_ids.")
+            return
+
+        hist_ids = panel_ids[0:3]
+        goal_id = panel_ids[3] if len(panel_ids) >= 4 else None
+        limits_id = panel_ids[4] if len(panel_ids) >= 5 else None
+        outputs_id = panel_ids[5] if len(panel_ids) >= 6 else None
+
+        # Compute history series (left plots)
+        history_series = []
+        current_vals = []
+        for i, pid in enumerate(hist_ids):
+            pdef = self.panel_defs_by_id.get(pid)
+            if pdef is None:
+                self.readout_plot_labels[i].config(text=f"{pid} (missing)")
+                self.readout_trends[i].plot([])
+                history_series.append([])
+                current_vals.append(None)
+                continue
+
+            self.readout_plot_labels[i].config(text=pdef.label)
+            data = self._compute_panel_data(pdef)
+            if not data or not data.get("series"):
+                self.readout_trends[i].plot([])
+                history_series.append([])
+                current_vals.append(None)
+                continue
+
+            s0 = data["series"][0] if data["series"] else []
+            # keep a manageable window for the small plot
+            window = 120
+            s0 = s0[-window:] if len(s0) > window else s0
+            self.readout_trends[i].plot(s0)
+            history_series.append(s0)
+            current_vals.append(self._last_non_none(s0))
+
+        # Pull limits (optional)
+        limits = [(None, None)] * 3
+        if limits_id:
+            ldef = self.panel_defs_by_id.get(limits_id)
+            if ldef and ldef.kind == "matrix_rows" and ldef.files:
+                limit_mat = load_ssv_matrix(ldef.files[0])
+                limits = self._extract_limits(limit_mat, rows=3)
+
+        # Pull goals (optional; also enables setpoint editing if matrix_rows)
+        goal_vals = [None, None, None]
+        self._readout_goal_path = None
+        self._readout_goal_matrix = None
+        self._readout_goal_row_count = 0
+        if goal_id:
+            gdef = self.panel_defs_by_id.get(goal_id)
+            if gdef and gdef.kind == "matrix_rows" and gdef.files:
+                gpath = gdef.files[0]
+                gmat = load_ssv_matrix(gpath)
+                self._readout_goal_path = gpath
+                self._readout_goal_matrix = gmat
+                self._readout_goal_row_count = len(gmat)
+                for i in range(min(3, len(gmat))):
+                    goal_vals[i] = self._last_non_none(gmat[i])
+
+        # Pull outputs (optional)
+        out_vals = [None, None, None]
+        if outputs_id:
+            odef = self.panel_defs_by_id.get(outputs_id)
+            if odef and odef.kind == "matrix_rows" and odef.files:
+                omat = load_ssv_matrix(odef.files[0])
+                for i in range(min(3, len(omat))):
+                    out_vals[i] = self._last_non_none(omat[i])
+            elif odef:
+                data = self._compute_panel_data(odef)
+                if data and data.get("series"):
+                    for i in range(min(3, len(data["series"]))):
+                        out_vals[i] = self._last_non_none(data["series"][i])
+
+        # Update goal file path label
+        if self._readout_goal_path:
+            self.readout_goal_path_label.config(text=f"(goal file: {self._readout_goal_path})")
+        else:
+            self.readout_goal_path_label.config(text="(no writable goal matrix in this readout)")
+
+        # Update indicators
+        for i in range(3):
+            cur = current_vals[i]
+            goal = goal_vals[i]
+            lo, hi = limits[i]
+
+            # Goal lamp: green if current is close to goal (heuristic tolerance)
+            goal_ok = False
+            if cur is not None and goal is not None:
+                tol = None
+                if lo is not None and hi is not None and hi != lo:
+                    tol = abs(hi - lo) * 0.05
+                if tol is None:
+                    tol = max(0.01, abs(goal) * 0.01)
+                goal_ok = abs(cur - goal) <= tol
+
+            self.readout_goal_lamps[i].set(goal_ok)
+
+            # Goal gauge: normalize goal into 0..1 using limits if available, else using local history min/max
+            if goal is None:
+                self.readout_goal_gauges[i].set(0.0)
+            else:
+                if lo is not None and hi is not None and hi != lo:
+                    self.readout_goal_gauges[i].set((goal - lo) / (hi - lo))
+                else:
+                    vals = [v for v in history_series[i] if v is not None]
+                    if vals:
+                        vmin, vmax = min(vals), max(vals)
+                        if vmax == vmin:
+                            vmax = vmin + 1.0
+                        self.readout_goal_gauges[i].set((goal - vmin) / (vmax - vmin))
+                    else:
+                        self.readout_goal_gauges[i].set(0.0)
+
+            # Low / High indicators (based on current and limits)
+            low_on = False
+            high_on = False
+            if cur is not None and lo is not None:
+                low_on = cur < lo
+            if cur is not None and hi is not None:
+                high_on = cur > hi
+            self.readout_low_lamps[i].set(low_on)
+            self.readout_high_lamps[i].set(high_on)
+
+            # Output indicator
+            ov = out_vals[i]
+            on = False
+            if ov is not None:
+                try:
+                    on = float(ov) > 0.5
+                except Exception:
+                    on = False
+            self.readout_output_labels[i].config(text=f"Output: {'ON' if on else 'OFF'}")
+            if ov is None:
+                self.readout_output_gauges[i].set(0.0)
+            else:
+                try:
+                    fv = float(ov)
+                except Exception:
+                    fv = 0.0
+                # If it's already 0..1, use it; else treat as boolean-ish.
+                if 0.0 <= fv <= 1.0:
+                    self.readout_output_gauges[i].set(fv)
+                else:
+                    self.readout_output_gauges[i].set(1.0 if fv > 0 else 0.0)
+
+        # Preload setpoint field for selected channel (when possible)
+        self._on_readout_channel_change()
+
+        self.status_var.set(f"Refreshed System Readout Panel {readout_def.label!r}.")
+
+    def on_readout_auto_toggle(self):
+        if self.readout_auto_var.get():
+            self._schedule_readout_refresh()
+
+    def _schedule_readout_refresh(self):
+        if not self.readout_auto_var.get():
+            return
+        self.refresh_readout()
+        self.after(1000, self._schedule_readout_refresh)
+
+    def readout_inc(self):
+        try:
+            v = float(self.readout_setpoint_var.get())
+            step = float(self.readout_step_var.get())
+        except Exception:
+            v, step = 0.0, 1.0
+        self.readout_setpoint_var.set(v + step)
+
+    def readout_dec(self):
+        try:
+            v = float(self.readout_setpoint_var.get())
+            step = float(self.readout_step_var.get())
+        except Exception:
+            v, step = 0.0, 1.0
+        self.readout_setpoint_var.set(v - step)
+
+    def readout_set_goal(self):
+        """Write the setpoint into the goal matrix (when this readout provides one)."""
+        if not self._readout_goal_path or self._readout_goal_matrix is None:
+            messagebox.showerror("Setpoint Error", "This readout does not provide a writable goal matrix (kind=matrix_rows).")
+            return
+
+        try:
+            ch = int(self.readout_channel_var.get())
+        except Exception:
+            messagebox.showerror("Setpoint Error", "Invalid channel (row) index.")
+            return
+
+        try:
+            val = float(self.readout_setpoint_var.get())
+        except Exception:
+            messagebox.showerror("Setpoint Error", "Invalid numeric setpoint value.")
+            return
+
+        mat = list(self._readout_goal_matrix or [])
+
+        if ch < 0:
+            messagebox.showerror("Setpoint Error", "Channel index must be >= 0.")
+            return
+
+        while len(mat) <= ch:
+            mat.append([])
+
+        if not mat[ch]:
+            mat[ch] = [val]
+        else:
+            mat[ch][-1] = val
+
+        try:
+            write_ssv_matrix(self._readout_goal_path, mat)
+        except Exception as e:
+            messagebox.showerror("Setpoint Error", f"Failed to write {self._readout_goal_path!r}:\n{e}")
+            return
+
+        # keep local copy in sync
+        self._readout_goal_matrix = mat
+        self.status_var.set(f"Set goal row {ch} to {val:g} in {self._readout_goal_path!r}.")
+        self.refresh_readout()
+
+
+    def readout_trigger_update_and_refresh(self):
+        """Trigger engine update, then refresh a few times to catch the new state."""
+        self.trigger_update_flag()
+        self._readout_burst_token = getattr(self, "_readout_burst_token", 0) + 1
+        self._schedule_readout_burst_refresh(token=self._readout_burst_token, remaining_ms=4000)
+
+
+    def _schedule_readout_burst_refresh(self, token: int, remaining_ms: int):
+        if token != getattr(self, "_readout_burst_token", None):
+            return
+        self.refresh_readout()
+        if remaining_ms <= 0:
+            return
+        self.after(500, lambda: self._schedule_readout_burst_refresh(token, remaining_ms - 500))
 
     def _build_underhood_tab(self):
         top = ttk.Frame(self.underhood_frame)
@@ -1701,7 +2408,7 @@ class GaiaConfigUI(tk.Tk):
             ctrl,
             textvariable=self.underhood_panel_var,
             state="readonly",
-            values=[p.label for p in self.panel_defs] if self.panel_defs else [],
+            values=[p.label for p in self.underhood_panel_defs] if self.underhood_panel_defs else [],
             width=30,
         )
         self.underhood_combo.pack(side=tk.LEFT, padx=5)
@@ -1883,16 +2590,21 @@ class GaiaConfigUI(tk.Tk):
         return None
 
     def refresh_underhood(self):
-        if not self.panel_defs:
-            self.underhood_canvas.plot([], [], message="No panel definitions (Skelly_Panels.ssv missing or empty).")
+        self._reload_panel_defs_if_changed()
+
+        if not self.underhood_panel_defs:
+            self.underhood_canvas.plot(
+                [], [],
+                message="No Under-The-Hood panels defined (Skelly_Panels.ssv missing/empty, or only non-plottable kinds)."
+            )
             self.status_var.set("No Under-The-Hood panels defined.")
             return
 
         label = self.underhood_panel_var.get()
-        panel_def = self.panel_defs_by_label.get(label)
+        panel_def = self.underhood_defs_by_label.get(label)
         if panel_def is None:
-            # if the selected label vanished or isn't valid, reset to first
-            panel_def = self.panel_defs[0]
+            # If the selected label vanished or isn't valid, reset to first
+            panel_def = self.underhood_panel_defs[0]
             self.underhood_panel_var.set(panel_def.label)
 
         data = self._compute_panel_data(panel_def)

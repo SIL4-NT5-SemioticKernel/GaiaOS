@@ -1,1 +1,1 @@
-cls && cd .. && builderman.bat && cd ..\..\bin && start python GUI_Skelly.0.1.py && NT4
+cls && cd .. && builderman.bat && cd ..\..\bin && start python GUI_Op.0.0.py && NT4

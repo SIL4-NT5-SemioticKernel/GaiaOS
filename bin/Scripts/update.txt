@@ -1,10 +1,12 @@
-@shift_Data
-
-@gather_Input
--encode
-eval Greenhouse 0.25
--eval Greenhouse 1.0
+shift_Data
+gather_Input
+eval Greenhouse 0.75
 gather_Output
+
+
+
+
+
 
 
 

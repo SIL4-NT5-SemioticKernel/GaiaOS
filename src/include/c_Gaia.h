@@ -826,40 +826,65 @@ public:
             }
         }
 		
+		std::ofstream tmp_OTrace("./System_State_Files/salience_map.ssv", std::ios::trunc);
+		
 		tmp_Stat_File << "\nOutput_Traces";
 		std::cout << "\nOutput_Traces";
 		for (int cou_O=0;cou_O<tmp_Output_Depth;cou_O++)
 		{
 			tmp_Stat_File << "\n";
 			tmp_Stat_File << "\n[" << cou_O << "].Data.Float ";
-			std::cout << "\n[" << cou_O << "].Data.Float ";
+			tmp_OTrace << "\n" << cou_O << " ";
+			std::cout << "\nTrace[" << cou_O << "] ";
+						
+			std::cout << " Data.Float <";
 			for (int cou_Raw=0;cou_Raw<tmp_Raw_Depth;cou_Raw++)
 			{
 				for (int cou_Chrono=0;cou_Chrono<tmp_Chrono_Depth;cou_Chrono++)
 				{
 					tmp_Stat_File << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].Data.D;
+					tmp_OTrace << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].Data.D;
 					std::cout << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].Data.D;
 				}
 			}
+			std::cout << ">";
 			tmp_Stat_File << "\n.\n[" << cou_O << "].Charge";
-			std::cout << "\n.\n[" << cou_O << "].Charge";
+			
+			std::cout << " Charge: ";
 			
 			tmp_Stat_File << " " << tmp_Bulk[0][0][cou_O].Charge;
+			tmp_OTrace << " " << tmp_Bulk[0][0][cou_O].Charge;
 			std::cout << " " << tmp_Bulk[0][0][cou_O].Charge;
 					
 			tmp_Stat_File << "\n[" << cou_O << "].RC";
-			std::cout << "\n[" << cou_O << "].RC";
+			std::cout << " RC: ";
 			float tmp_RC_Avg = 0.0;
+			int tmp_RC_Avg_Count = 0;
 			for (int cou_Raw=0;cou_Raw<tmp_Raw_Depth;cou_Raw++)
 			{
 				for (int cou_Chrono=0;cou_Chrono<tmp_Chrono_Depth;cou_Chrono++)
 				{
-					tmp_Stat_File << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].RC;
-					std::cout << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].RC;
+					tmp_RC_Avg += tmp_Bulk[cou_Chrono][cou_Raw][cou_O].RC;
+					tmp_RC_Avg_Count++;
 				}
+			}
+			
+			if ((tmp_RC_Avg_Count != 0) && (tmp_RC_Avg != 0))
+			{
+				tmp_Stat_File << " " << (tmp_RC_Avg / tmp_RC_Avg_Count);
+				tmp_OTrace << " " << (tmp_RC_Avg / tmp_RC_Avg_Count);
+				std::cout << " " << (tmp_RC_Avg / tmp_RC_Avg_Count);
+			}
+			else 
+			{
+				tmp_OTrace << " " << 0;
+				tmp_Stat_File << " " << 0;
+				std::cout << " " << 0;
+				
 			}
 		}
 
+		tmp_OTrace.close();
 
         tmp_Validate_Direction.resize(tmp_Chrono_Depth);
         tmp_Validate_VDirection.resize(tmp_Chrono_Depth);
@@ -1106,6 +1131,87 @@ public:
             }
         }
 
+
+		std::ofstream tmp_OFTrace("./System_State_Files/salience_map.Filtered.ssv", std::ios::trunc);
+		
+		tmp_Stat_File << "\nOutput_Traces_Filtered";
+		std::cout << "\nOutput_Traces_Filtered";
+		for (int cou_O=0;cou_O<tmp_Output_Depth;cou_O++)
+		{
+			tmp_Stat_File << "\n";
+			tmp_Stat_File << "\n[" << cou_O << "].Data.Float ";
+			tmp_OFTrace << "\n" << cou_O << " ";
+			std::cout << "\nTrace[" << cou_O << "] ";
+			
+			
+            if (tmp_Validate_Direction_Sum[cou_O] < Trace_Selection_Config.min_direction_percent) 
+			{ 
+				std::cout << " Delta_Match: " << tmp_Validate_Direction_Sum[cou_O];
+				std::cout << " / " << Trace_Selection_Config.min_direction_percent;
+			}
+            if (tmp_Validate_Start_Anchor_Sum[cou_O] < Trace_Selection_Config.min_start_anchor_percent) 
+			{ 
+				std::cout << " Start_Anchor_Match: " << tmp_Validate_Start_Anchor_Sum[cou_O];
+				std::cout << " / " << Trace_Selection_Config.min_start_anchor_percent;
+			}
+			
+            if (tmp_Validate_Direction_Sum[cou_O] < Trace_Selection_Config.min_direction_percent) { continue; }
+            if (tmp_Validate_Start_Anchor_Sum[cou_O] < Trace_Selection_Config.min_start_anchor_percent) { continue; }
+			
+			std::cout << " Data.Float <";
+			for (int cou_Raw=0;cou_Raw<tmp_Raw_Depth;cou_Raw++)
+			{
+				for (int cou_Chrono=0;cou_Chrono<tmp_Chrono_Depth;cou_Chrono++)
+				{
+					tmp_Stat_File << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].Data.D;
+					tmp_OFTrace << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].Data.D;
+					std::cout << " " << tmp_Bulk[cou_Chrono][cou_Raw][cou_O].Data.D;
+				}
+			}
+			std::cout << ">";
+			tmp_Stat_File << "\n.\n[" << cou_O << "].Charge";
+			
+			std::cout << " Charge: ";
+			
+			tmp_Stat_File << " " << tmp_Bulk[0][0][cou_O].Charge;
+			tmp_OFTrace << " " << tmp_Bulk[0][0][cou_O].Charge;
+			std::cout << " " << tmp_Bulk[0][0][cou_O].Charge;
+					
+			tmp_Stat_File << "\n[" << cou_O << "].RC";
+			std::cout << " RC: ";
+			float tmp_RC_Avg = 0.0;
+			int tmp_RC_Avg_Count = 0;
+			for (int cou_Raw=0;cou_Raw<tmp_Raw_Depth;cou_Raw++)
+			{
+				for (int cou_Chrono=0;cou_Chrono<tmp_Chrono_Depth;cou_Chrono++)
+				{
+					tmp_RC_Avg += tmp_Bulk[cou_Chrono][cou_Raw][cou_O].RC;
+					tmp_RC_Avg_Count++;
+				}
+			}
+			
+			if ((tmp_RC_Avg_Count != 0) && (tmp_RC_Avg != 0))
+			{
+				tmp_Stat_File << " " << (tmp_RC_Avg / tmp_RC_Avg_Count);
+				tmp_OFTrace << " " << (tmp_RC_Avg / tmp_RC_Avg_Count);
+				std::cout << " " << (tmp_RC_Avg / tmp_RC_Avg_Count);
+			}
+			else 
+			{
+				tmp_OFTrace << " " << 0;
+				tmp_Stat_File << " " << 0;
+				std::cout << " " << 0;
+				
+			}
+			std::cout << " Delta_Match: " << tmp_Validate_Direction_Sum[cou_O];
+			std::cout << " / " << Trace_Selection_Config.min_direction_percent;
+			std::cout << " Start_Anchor_Match: " << tmp_Validate_Start_Anchor_Sum[cou_O];
+			std::cout << " / " << Trace_Selection_Config.min_start_anchor_percent;
+		}
+
+		tmp_OFTrace.close();
+
+
         int tmp_Valid_Traces = 0;
 
         std::cout << "\n\n Trace Selection Scores:";
@@ -1116,12 +1222,12 @@ public:
             if (tmp_Validate_Direction_Sum[cou_O] < Trace_Selection_Config.min_direction_percent) { continue; }
             if (tmp_Validate_Start_Anchor_Sum[cou_O] < Trace_Selection_Config.min_start_anchor_percent) { continue; }
 
-            //---std::cout << "\n[" << cou_O << "] ";
-            //---std::cout << " DMatch ";
+            /*---*/std::cout << "\n[" << cou_O << "] ";
+            /*---*/std::cout << " Delta_Direction_Match ";
             for (int cou_A = 0; cou_A < IO.Afferent_Count; cou_A++)
             {
                 
-                /*
+                
                 std::cout << " " << cou_A << "[";
                 for (int cou_Chrono = 1; cou_Chrono < (tmp_Chrono_Depth); cou_Chrono++)
                 {
@@ -1135,24 +1241,24 @@ public:
                     }
                 }
                 std::cout << "] ";
-                */
-                //---std::cout << " " << cou_A << " [";
+                
+                /*---*/std::cout << " " << cou_A << " [";
                 for (int cou_Chrono = 1; cou_Chrono < (tmp_Chrono_Depth); cou_Chrono++)
                 {
                     if (tmp_Validate_VDirection[cou_Chrono][cou_A][cou_O] == 1)
                     {
-                        //---std::cout << "+";
+                        /*---*/std::cout << "+";
                     }
                     else
                     {
-                        //---std::cout << " ";
+                        /*---*/std::cout << " ";
                     }
                 }
-                //---std::cout << "] ";
+                /*---*/std::cout << "] ";
                 
             }
 
-            //---std::cout << " ... Sig ";
+            /*---*/std::cout << " ... Sig ";
 
             
             for (int cou_E = 0; cou_E < IO.Efferent_Count; cou_E++)
@@ -1469,7 +1575,7 @@ public:
             {
                 tmp_OF << Tick_Count << " " << tmp_Valid_Traces << "\n";
             }
-        }
+        } 
 
         // Nearly valid traces over time
         {
@@ -1488,11 +1594,12 @@ public:
                 tmp_NOF << Tick_Count << " " << TSG.NT4_Core.Base.Nodes.Node_Count << "\n";
             }
         }
-
+		
+		
         // Boredom detection is still computed the same way, we just log separately.
         if ((Previous_Node_Count - TSG.NT4_Core.Base.Nodes.Node_Count) == 0)
         {
-            flg_Bored = true;
+            //flg_Bored = true;
         }
 
         Previous_Node_Count = int(TSG.NT4_Core.Base.Nodes.Node_Count);
@@ -2923,6 +3030,8 @@ public:
 				std::ofstream tmp_CFFF("./Control_Panel_Finished.ssv", std::ios::trunc);
 				tmp_CFFF << "1";
 				tmp_CFFF.close();
+				
+				std::cout << "\n\n";
             }
 			
 			
@@ -2946,6 +3055,8 @@ public:
 				API.write_System_State_Snapshot();
 				//Does this in eval_Traces
 				//API.write_Bulk(1, "/System_State_Files/bulk.ssv");
+				
+				std::cout << "\n\n";
 			}
             Tick++;
 			

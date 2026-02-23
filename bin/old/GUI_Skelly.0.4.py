@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import math
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -459,6 +460,206 @@ class LinePlotCanvas(tk.Canvas):
             y_offset += 12
 
 # ---------------------------------------------------------------------------
+# Small dashboard widgets (Status / Goals)
+# ---------------------------------------------------------------------------
+
+class LedIndicator(tk.Canvas):
+    """Tiny circular LED indicator."""
+
+    def __init__(self, master, size=14, on_color="green", off_color="#9a9a9a", **kwargs):
+        bg = kwargs.pop("bg", None)
+        super().__init__(master, width=size, height=size, highlightthickness=0, bg=bg, **kwargs)
+        self._on_color = on_color
+        self._off_color = off_color
+        pad = 2
+        self._oval = self.create_oval(
+            pad, pad, size - pad, size - pad,
+            outline="#222222", width=1, fill=self._off_color
+        )
+
+    def set_on(self, on: bool, on_color=None, off_color=None):
+        if on_color is not None:
+            self._on_color = on_color
+        if off_color is not None:
+            self._off_color = off_color
+        self.itemconfigure(self._oval, fill=(self._on_color if on else self._off_color))
+
+
+class MiniPlotCanvas(tk.Canvas):
+    """Lightweight grid + line plot for per-channel history."""
+
+    def __init__(self, master, width=420, height=80, **kwargs):
+        bg = kwargs.pop("bg", "#f5f5f5")
+        super().__init__(
+            master, width=width, height=height,
+            bg=bg, highlightthickness=1, highlightbackground="#2b2b2b", **kwargs
+        )
+
+
+    def plot(self, x_data, y_data, title=None, goal=None, x_hint=None, message=None):
+        # Redraw everything each call: cheap at this scale and avoids artifacts.
+        self.delete("all")
+        self.update_idletasks()
+
+        w = max(int(self.winfo_width()), 10)
+        h = max(int(self.winfo_height()), 10)
+
+        # Layout margins (room for labels and scale)
+        left_m = 48
+        right_m = 10
+        top_m = 18
+        bot_m = 16
+
+        plot_w = max(w - left_m - right_m, 10)
+        plot_h = max(h - top_m - bot_m, 10)
+        x0 = left_m
+        y0 = top_m
+        x1 = left_m + plot_w
+        y1 = top_m + plot_h
+
+        # Title / hint
+        if title:
+            self.create_text(6, 2, anchor="nw", text=title, fill="#111111")
+        if x_hint:
+            self.create_text(w - 6, h - 2, anchor="se", text=x_hint, fill="#333333")
+
+        if message is not None:
+            self.create_text((x0 + x1) // 2, (y0 + y1) // 2, text=message, fill="#333333")
+            return
+
+        if not x_data or not y_data:
+            self.create_text((x0 + x1) // 2, (y0 + y1) // 2, text="(no data)", fill="#333333")
+            return
+
+        # Bounds ignoring None
+        xs = [x for x in x_data if isinstance(x, (int, float))]
+        ys = [y for y in y_data if isinstance(y, (int, float))]
+        if not xs or not ys:
+            self.create_text((x0 + x1) // 2, (y0 + y1) // 2, text="(no numeric data)", fill="#333333")
+            return
+
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
+        if x_max == x_min:
+            x_max = x_min + 1.0
+        if y_max == y_min:
+            y_max = y_min + 1.0
+
+        # Pad y for readability
+        y_pad = 0.05 * (y_max - y_min)
+        y_min -= y_pad
+        y_max += y_pad
+
+        # Grid
+        grid_px = 10
+        for gx in range(x0, x1 + 1, grid_px):
+            self.create_line(gx, y0, gx, y1, fill="#d0d0d0")
+        for gy in range(y0, y1 + 1, grid_px):
+            self.create_line(x0, gy, x1, gy, fill="#d0d0d0")
+
+        # Axes box
+        self.create_rectangle(x0, y0, x1, y1, outline="#2b2b2b", width=1)
+
+        def x_to_px(x):
+            return x0 + (x - x_min) / (x_max - x_min) * plot_w
+
+        def y_to_px(y):
+            return y1 - (y - y_min) / (y_max - y_min) * plot_h
+
+        # Y-scale labels (min/mid/max)
+        def _fmt(v):
+            try:
+                if abs(v) >= 1000 or (abs(v) < 0.01 and v != 0):
+                    return f"{v:.2e}"
+                return f"{v:.3g}"
+            except Exception:
+                return str(v)
+
+        y_mid = (y_min + y_max) / 2.0
+        self.create_text(x0 - 6, y0, anchor="ne", text=_fmt(y_max), fill="#111111")
+        self.create_text(x0 - 6, (y0 + y1) / 2, anchor="e", text=_fmt(y_mid), fill="#111111")
+        self.create_text(x0 - 6, y1, anchor="se", text=_fmt(y_min), fill="#111111")
+
+        # Optional goal line
+        if isinstance(goal, (int, float)):
+            yg = y_to_px(float(goal))
+            if y0 <= yg <= y1:
+                self.create_line(x0, yg, x1, yg, fill="#0b57d0", width=2)
+                self.create_text(x1 - 2, yg - 2, anchor="se", text=f"goal { _fmt(goal) }", fill="#0b57d0")
+
+        # Polyline segments (break on None)
+        pts = []
+        for x, y in zip(x_data, y_data):
+            if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                if len(pts) >= 4:
+                    self.create_line(*pts, fill="#d11f1f", width=3, capstyle="round", joinstyle="round")
+                pts = []
+                continue
+            pts.extend([x_to_px(x), y_to_px(y)])
+
+        if len(pts) >= 4:
+            self.create_line(*pts, fill="#d11f1f", width=3, capstyle="round", joinstyle="round")
+
+        # Latest point marker + latest value label
+        # (helps verify that it is updating even when signal is constant)
+        try:
+            # find last numeric y
+            last_i = None
+            for i in range(len(y_data) - 1, -1, -1):
+                if isinstance(x_data[i], (int, float)) and isinstance(y_data[i], (int, float)):
+                    last_i = i
+                    break
+            if last_i is not None:
+                lx = x_to_px(float(x_data[last_i]))
+                ly = y_to_px(float(y_data[last_i]))
+                r = 3
+                self.create_oval(lx - r, ly - r, lx + r, ly + r, outline="#111111", fill="#d11f1f")
+                self.create_text(x1 - 4, y0 + 2, anchor="ne", text=f"now: {_fmt(y_data[last_i])}", fill="#111111")
+        except Exception:
+            pass
+
+class _ScrollableFrame(ttk.Frame):
+    """A ttk.Frame with a vertical scrollbar."""
+
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        self._canvas = tk.Canvas(self, highlightthickness=0)
+        self._vsb = ttk.Scrollbar(self, orient="vertical", command=self._canvas.yview)
+        self._canvas.configure(yscrollcommand=self._vsb.set)
+
+        self._inner = ttk.Frame(self._canvas)
+        self._inner_id = self._canvas.create_window((0, 0), window=self._inner, anchor="nw")
+
+        self._canvas.grid(row=0, column=0, sticky="nsew")
+        self._vsb.grid(row=0, column=1, sticky="ns")
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+
+        self._inner.bind("<Configure>", self._on_inner_configure)
+        self._canvas.bind("<Configure>", self._on_canvas_configure)
+
+        # mouse wheel support (best-effort)
+        self._canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    @property
+    def inner(self):
+        return self._inner
+
+    def _on_inner_configure(self, _event=None):
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event):
+        # keep inner width in sync with canvas width
+        self._canvas.itemconfigure(self._inner_id, width=event.width)
+
+    def _on_mousewheel(self, event):
+        try:
+            # Windows / Mac (delta sign differs but division works)
+            self._canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        except Exception:
+            pass
+
+# ---------------------------------------------------------------------------
 # Main UI
 # ---------------------------------------------------------------------------
 
@@ -470,7 +671,8 @@ class GaiaConfigUI(tk.Tk):
         self.geometry("1200x800")
 
         # auto-refresh toggles
-        self.summary_auto_var    = tk.BooleanVar(value=False)
+        self.summary_auto_var    = tk.BooleanVar(value=True)
+        self._summary_after_id     = None
         self.io_auto_var         = tk.BooleanVar(value=False)
         self.status_auto_var     = tk.BooleanVar(value=False)
         self.underhood_auto_var  = tk.BooleanVar(value=False)
@@ -507,9 +709,19 @@ class GaiaConfigUI(tk.Tk):
 
         # max points after downsampling for plots
         self.max_points          = 1000
+        # --- Summary dashboard history buffer (in-GUI rolling window) ---
+        self.dashboard_history_points_var = tk.IntVar(value=180)  # 0 = unlimited
+        self.dashboard_histories = {}  # (kind, idx) -> {"x": deque, "y": deque}
+        self._dashboard_row_defs = []  # cached slot defs (kind, idx, label)
+        self._dashboard_sample_counter = 0
 
         self._build_widgets()
         self.refresh_all()
+
+
+        # start summary auto-refresh loop (for dashboard history)
+        if self.summary_auto_var.get():
+            self._schedule_summary_refresh()
 
     # --- Layout scaffold ---------------------------------------------------
 
@@ -960,7 +1172,96 @@ class GaiaConfigUI(tk.Tk):
 
 
     def _build_summary_tab(self):
-        top = ttk.Frame(self.summary_frame)
+        outer = ttk.Frame(self.summary_frame)
+        outer.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Inside Status/Goals, default to a dashboard view, but keep the old tables.
+        self.summary_nb = ttk.Notebook(outer)
+        self.summary_nb.pack(fill=tk.BOTH, expand=True)
+
+        self.summary_dashboard_frame = ttk.Frame(self.summary_nb)
+        self.summary_tables_frame = ttk.Frame(self.summary_nb)
+
+        self.summary_nb.add(self.summary_dashboard_frame, text="Dashboard")
+        self.summary_nb.add(self.summary_tables_frame, text="Tables")
+
+        self._build_summary_dashboard()
+        self._build_summary_tables()
+
+    def _build_summary_dashboard(self):
+        top = ttk.Frame(self.summary_dashboard_frame)
+        top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Header / controls
+        hdr = ttk.Frame(top)
+        hdr.pack(fill=tk.X, pady=(0, 6))
+
+        self.dash_engine_var = tk.StringVar(value="Engine: unknown")
+        ttk.Label(hdr, textvariable=self.dash_engine_var).pack(side=tk.LEFT)
+
+        ttk.Label(hdr, text="History points:").pack(side=tk.LEFT, padx=(15, 3))
+        self.dash_points_spin = ttk.Spinbox(
+            hdr,
+            from_=0,
+            to=5000,
+            increment=10,
+            textvariable=self.dashboard_history_points_var,
+            width=7,
+        )
+        self.dash_points_spin.pack(side=tk.LEFT)
+
+        ttk.Button(hdr, text="Clear history", command=self._dashboard_clear_history).pack(
+            side=tk.LEFT, padx=8
+        )
+
+        ttk.Button(hdr, text="Refresh", command=self.refresh_summary).pack(side=tk.RIGHT)
+
+        auto_chk = ttk.Checkbutton(
+            hdr,
+            text="Auto-refresh",
+            variable=self.summary_auto_var,
+            command=self.on_summary_auto_toggle,
+        )
+        auto_chk.pack(side=tk.RIGHT, padx=(0, 10))
+
+        # Column headers
+        cols = ttk.Frame(top)
+        cols.pack(fill=tk.X, pady=(0, 4))
+        ttk.Label(cols, text="History").grid(row=0, column=0, sticky="w", padx=(5, 0))
+        ttk.Label(cols, text="Goal").grid(row=0, column=1, sticky="w", padx=(10, 0))
+        ttk.Label(cols, text="Output").grid(row=0, column=2, sticky="w", padx=(10, 0))
+        cols.columnconfigure(0, weight=1)
+
+        # Scrollable rows area
+        self.dash_rows_scroller = _ScrollableFrame(top)
+        self.dash_rows_scroller.pack(fill=tk.BOTH, expand=True)
+
+        self.dash_rows_container = self.dash_rows_scroller.inner
+        self.dash_row_widgets = {}  # (kind, idx) -> widget dict
+
+        # Footer shortcuts (kept from the older summary view)
+        ftr = ttk.Frame(top)
+        ftr.pack(fill=tk.X, pady=(6, 0))
+
+        ttk.Button(
+            ftr, text="Open Control Panel", command=lambda: self.nb.select(self.ctrl_frame)
+        ).pack(side=tk.LEFT)
+
+        ttk.Button(
+            ftr, text="Open I/O State", command=lambda: self.nb.select(self.io_frame)
+        ).pack(side=tk.LEFT, padx=6)
+
+        ttk.Button(
+            ftr, text="Open Under The Hood", command=lambda: self.nb.select(self.underhood_frame)
+        ).pack(side=tk.LEFT, padx=6)
+
+        ttk.Button(
+            ftr, text="Open System Status", command=lambda: self.nb.select(self.status_frame)
+        ).pack(side=tk.LEFT, padx=6)
+
+    def _build_summary_tables(self):
+        # This preserves the previous "Status / Goals" content.
+        top = ttk.Frame(self.summary_tables_frame)
         top.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # Engine state box
@@ -1069,8 +1370,357 @@ class GaiaConfigUI(tk.Tk):
             command=lambda: self.nb.select(self.underhood_frame),
         ).pack(side=tk.LEFT, padx=5)
 
+    def _dashboard_clear_history(self):
+        self.dashboard_histories = {}
+        self._dashboard_sample_counter = 0
+        # refresh plots immediately
+        self._dashboard_refresh_from_status(None, {}, {})
+
+
+def _dashboard_get_slots_from_pinout(self, afferents=None, efferents=None):
+    """Map pinout.cfg entries to (kind, idx) slots.
+
+    Problem this solves: the engine's A{n}/E{n} indices are not necessarily
+    the same as "the Nth afferent" in pinout order. If we guess indices
+    incorrectly, the dashboard will show empty/non-updating plots even while
+    the system is running.
+
+    Strategy:
+      1) Parse pinout.cfg to get an ordered list of entries (A-ish vs E-ish).
+      2) If we can infer an explicit A/E index from the entry (path/raw/desc),
+         use it.
+      3) Otherwise, assign indices by *aligning with what's actually present*
+         in status.ssv (afferents/efferents dict keys), in order, skipping
+         indices already claimed by explicit matches.
+      4) If pinout.cfg is missing/empty, return None to fall back to status.ssv.
+    """
+    try:
+        entries = self._parse_pinout()
+    except Exception:
+        entries = []
+
+    if not entries:
+        return None
+
+    aff_status = sorted(afferents.keys()) if isinstance(afferents, dict) else []
+    eff_status = sorted(efferents.keys()) if isinstance(efferents, dict) else []
+
+    def _is_eff(ent):
+        mode = (ent.get("mode") or "").strip()
+        return mode.startswith("E") and mode != ""
+
+    def _extract_idx(kind, ent):
+        """Try to pull an explicit index from pinout entry text."""
+        cand = []
+        for k in ("path", "raw", "desc"):
+            v = ent.get(k)
+            if isinstance(v, str) and v:
+                cand.append(v)
+                cand.append(os.path.basename(v))
+        txt = " ".join(cand)
+        # Common patterns: A0, E12, A0_, E3-, ... (avoid matching hex like 0xA0)
+        m = re.search(rf"(?<!0x)\b{kind}(\d+)\b", txt)
+        if not m:
+            m = re.search(rf"(?<!0x){kind}(\d+)", txt)
+        if not m:
+            return None
+        try:
+            return int(m.group(1))
+        except Exception:
+            return None
+
+    # split ordered entries
+    ordered = []
+    for ent in entries:
+        kind = "E" if _is_eff(ent) else "A"
+        ordered.append((kind, ent))
+
+    # First pass: explicit matches
+    used_aff = set()
+    used_eff = set()
+    resolved = []  # (kind, idx, ent) in original order
+
+    for kind, ent in ordered:
+        idx = _extract_idx(kind, ent)
+        if idx is not None:
+            if kind == "A":
+                if (not aff_status) or (idx in aff_status):
+                    used_aff.add(idx)
+                    resolved.append((kind, idx, ent))
+                    continue
+            else:
+                if (not eff_status) or (idx in eff_status):
+                    used_eff.add(idx)
+                    resolved.append((kind, idx, ent))
+                    continue
+        resolved.append((kind, None, ent))
+
+    # Second pass: fill missing by aligning with status indices
+    aff_pool = [i for i in aff_status if i not in used_aff]
+    eff_pool = [i for i in eff_status if i not in used_eff]
+    aff_it = iter(aff_pool)
+    eff_it = iter(eff_pool)
+
+    out = []
+    for kind, idx, ent in resolved:
+        if idx is None:
+            if kind == "A":
+                idx = next(aff_it, None)
+                if idx is None:
+                    # fall back to next integer after max used/status
+                    base = max(used_aff | set(aff_status) | { -1 }) + 1
+                    idx = base
+                    used_aff.add(idx)
+                else:
+                    used_aff.add(idx)
+            else:
+                idx = next(eff_it, None)
+                if idx is None:
+                    base = max(used_eff | set(eff_status) | { -1 }) + 1
+                    idx = base
+                    used_eff.add(idx)
+                else:
+                    used_eff.add(idx)
+        out.append((kind, idx, ent))
+
+    # Finally: if status has extra indices not represented in pinout,
+    # append them so values aren't silently hidden.
+    for idx in aff_status:
+        if idx not in used_aff:
+            out.append(("A", idx, {"mode": "A", "desc": f"(unmapped) A{idx}", "path": "", "raw": ""}))
+    for idx in eff_status:
+        if idx not in used_eff:
+            out.append(("E", idx, {"mode": "E", "desc": f"(unmapped) E{idx}", "path": "", "raw": ""}))
+
+    return out
+
+    def _dashboard_get_slots_from_status(self, afferents, efferents):
+        slots = []
+        for idx in sorted(afferents.keys()):
+            slots.append(("A", idx, {"mode": "A", "desc": f"A{idx}", "path": ""}))
+        for idx in sorted(efferents.keys()):
+            slots.append(("E", idx, {"mode": "E", "desc": f"E{idx}", "path": ""}))
+        return slots
+
+    def _dashboard_ensure_rows(self, slots):
+        """Build row widgets if the slot definitions changed."""
+        sig = [(k, i, (ent.get("desc") if isinstance(ent, dict) else str(ent))) for (k, i, ent) in slots]
+        if sig == self._dashboard_row_defs and self.dash_row_widgets:
+            return
+
+        # clear existing
+        for child in list(self.dash_rows_container.winfo_children()):
+            child.destroy()
+        self.dash_row_widgets = {}
+        self._dashboard_row_defs = sig
+
+        for r, (kind, idx, ent) in enumerate(slots):
+            desc = ent.get("desc", f"{kind}{idx}") if isinstance(ent, dict) else str(ent)
+            label_txt = f"{kind}{idx} — {desc}"
+
+            row = ttk.Frame(self.dash_rows_container, relief="ridge", padding=6)
+            row.grid(row=r, column=0, sticky="ew", padx=4, pady=4)
+            row.columnconfigure(0, weight=1)
+
+            # left: label + plot
+            left = ttk.Frame(row)
+            left.grid(row=0, column=0, sticky="nsew")
+            left.columnconfigure(1, weight=1)
+
+            name_lbl = ttk.Label(left, text=label_txt)
+            name_lbl.grid(row=0, column=0, sticky="w")
+
+            val_var = tk.StringVar(value="")
+            val_lbl = ttk.Label(left, textvariable=val_var)
+            val_lbl.grid(row=0, column=1, sticky="e", padx=(10, 0))
+
+            plot = MiniPlotCanvas(left, width=520, height=90)
+            plot.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+
+            # middle: goal + low/high
+            mid = ttk.Frame(row)
+            mid.grid(row=0, column=1, sticky="ns", padx=(12, 0))
+            ttk.Label(mid, text="Goal").grid(row=0, column=0, sticky="w")
+
+            goal_led = LedIndicator(mid, size=14, on_color="#15a44a")
+            goal_led.grid(row=0, column=1, padx=6)
+
+            goal_val_var = tk.StringVar(value="")
+            ttk.Label(mid, textvariable=goal_val_var).grid(row=0, column=2, sticky="w")
+
+            # low/high indicators
+            ttk.Label(mid, text="Low").grid(row=1, column=0, sticky="w", pady=(6, 0))
+            low_led = LedIndicator(mid, size=14, on_color="#15a44a")
+            low_led.grid(row=1, column=1, padx=6, pady=(6, 0))
+
+            ttk.Label(mid, text="High").grid(row=1, column=2, sticky="w", pady=(6, 0))
+            high_led = LedIndicator(mid, size=14, on_color="#15a44a")
+            high_led.grid(row=1, column=3, padx=6, pady=(6, 0))
+
+            # right: output state
+            right = ttk.Frame(row)
+            right.grid(row=0, column=2, sticky="ns", padx=(12, 0))
+            ttk.Label(right, text="Output").grid(row=0, column=0, sticky="w")
+
+            out_led = LedIndicator(right, size=14, on_color="#d11f1f")
+            out_led.grid(row=0, column=1, padx=6)
+
+            out_var = tk.StringVar(value="")
+            ttk.Label(right, textvariable=out_var).grid(row=0, column=2, sticky="w")
+
+            self.dash_row_widgets[(kind, idx)] = {
+                "label": name_lbl,
+                "value_var": val_var,
+                "plot": plot,
+                "goal_led": goal_led,
+                "goal_val_var": goal_val_var,
+                "low_led": low_led,
+                "high_led": high_led,
+                "out_led": out_led,
+                "out_var": out_var,
+                "ent": ent,
+            }
+
+        self.dash_rows_container.columnconfigure(0, weight=1)
+
+
+def _dashboard_refresh_from_status(self, engine, afferents, efferents):
+    # Choose slot source:
+    # prefer pinout.cfg ordering, but resolve indices against what status.ssv actually exposes.
+    slots = self._dashboard_get_slots_from_pinout(afferents=afferents, efferents=efferents)
+    if slots is None:
+        slots = self._dashboard_get_slots_from_status(afferents, efferents)
+
+    self._dashboard_ensure_rows(slots)
+
+    # x-axis sample index (monotonic within this GUI session).
+    # This guarantees the in-GUI history scrolls even if Session_Tick is static.
+    x_now = float(self._dashboard_sample_counter)
+    self._dashboard_sample_counter += 1.0
+
+    # window length
+    try:
+        maxlen = int(self.dashboard_history_points_var.get())
+    except Exception:
+        maxlen = 180
+    if maxlen < 0:
+        maxlen = 0
+
+    def _hist_for(key):
+        h = self.dashboard_histories.get(key)
+        if h is None:
+            from collections import deque
+            h = {"x": deque(maxlen=(maxlen if maxlen else None)), "y": deque(maxlen=(maxlen if maxlen else None))}
+            self.dashboard_histories[key] = h
+        else:
+            # update maxlen if user changed it
+            if maxlen:
+                if h["x"].maxlen != maxlen:
+                    from collections import deque
+                    h["x"] = deque(h["x"], maxlen=maxlen)
+                    h["y"] = deque(h["y"], maxlen=maxlen)
+            else:
+                if h["x"].maxlen is not None:
+                    from collections import deque
+                    h["x"] = deque(h["x"], maxlen=None)
+                    h["y"] = deque(h["y"], maxlen=None)
+        return h
+
+    for kind, idx, ent in slots:
+        w = self.dash_row_widgets.get((kind, idx))
+        if not w:
+            continue
+
+        val = None
+        goal = None
+
+        if kind == "A":
+            d = afferents.get(idx, {}) if isinstance(afferents, dict) else {}
+            val = d.get("Value")
+            goal = d.get("Goal")
+        else:
+            d = efferents.get(idx, {}) if isinstance(efferents, dict) else {}
+            val = d.get("Value")
+
+        # history update (only numeric values)
+        key = (kind, idx)
+        h = _hist_for(key)
+        h["x"].append(float(x_now))
+        if isinstance(val, (int, float)):
+            h["y"].append(float(val))
+        else:
+            # break the polyline segment
+            h["y"].append(None)
+
+        # value label
+        if isinstance(val, (int, float)):
+            w["value_var"].set(f"{val:g}")
+        else:
+            w["value_var"].set("" if val is None else str(val))
+
+        # goal indicator
+        has_goal = isinstance(goal, (int, float))
+        w["goal_led"].set_on(has_goal)
+        w["goal_val_var"].set(f"{goal:g}" if has_goal else "")
+
+        # low/high indicator (only when a numeric goal exists)
+        low_on = False
+        high_on = False
+        if has_goal and isinstance(val, (int, float)):
+            if val < goal:
+                low_on = True
+            elif val > goal:
+                high_on = True
+        w["low_led"].set_on(low_on)
+        w["high_led"].set_on(high_on)
+
+        # output indicator (for efferents)
+        out_on = False
+        if kind == "E" and isinstance(val, (int, float)):
+            out_on = bool(val)
+        w["out_led"].set_on(out_on)
+        if kind == "E":
+            w["out_var"].set("ON" if out_on else "OFF")
+        else:
+            w["out_var"].set("")
+
+        # plot (oldest on left, newest on right)
+        x_list = list(h["x"])
+        y_list = list(h["y"])
+
+        # title: prefer the human description from pinout, but keep the A#/E# prefix stable
+        desc = ""
+        if isinstance(ent, dict):
+            desc = (ent.get("desc") or "").strip()
+        title = f"{kind}{idx}" + (f" — {desc}" if desc else "")
+
+        if not any(isinstance(v, (int, float)) for v in y_list):
+            w["plot"].plot([], [], title=title, message="(no numeric data yet)")
+        else:
+            w["plot"].plot(
+                x_list, y_list,
+                title=title,
+                goal=(goal if has_goal else None),
+                x_hint="oldest → newest"
+            )
+
     def refresh_summary(self):
         engine, afferents, efferents = parse_status_struct(STATUS_FILE)
+
+
+        # Dashboard (history graphs / goals / outputs)
+        if hasattr(self, "dash_row_widgets"):
+            try:
+                self._dashboard_refresh_from_status(engine, afferents, efferents)
+            except Exception as e:
+                # Surface errors instead of silently failing (silent failures look like "no updates").
+                try:
+                    import traceback
+                    traceback.print_exc()
+                except Exception:
+                    pass
+                if hasattr(self, "status_var"):
+                    self.status_var.set(f"Dashboard update error: {e}")
 
         # Engine state
         session_tick = engine.get("Session_Tick")
@@ -1091,22 +1741,26 @@ class GaiaConfigUI(tk.Tk):
         self._last_session_tick = session_tick if session_tick is not None else self._last_session_tick
 
         if isinstance(run_update, (int, float)):
-            if run_update:
-                state_text += " | Updates: ON"
-            else:
-                state_text += " | Updates: OFF"
+            state_text += " | Updates: ON" if run_update else " | Updates: OFF"
 
         if isinstance(exit_flag, (int, float)) and exit_flag:
             state_text += " | EXIT requested"
 
-        self.summary_engine_label.config(text=state_text)
+        # dashboard header (if built)
+        if hasattr(self, "dash_engine_var"):
+            self.dash_engine_var.set(state_text)
 
-        self.summary_tick_label.config(
-            text=f"Session tick: {session_tick if session_tick is not None else '-'}"
-        )
-        self.summary_proc_label.config(
-            text=f"Processor tick: {proc_tick if proc_tick is not None else '-'}"
-        )
+        # tables header (if built)
+        if hasattr(self, "summary_engine_label"):
+            self.summary_engine_label.config(text=state_text)
+        if hasattr(self, "summary_tick_label"):
+            self.summary_tick_label.config(
+                text=f"Session tick: {session_tick if session_tick is not None else '-'}"
+            )
+        if hasattr(self, "summary_proc_label"):
+            self.summary_proc_label.config(
+                text=f"Processor tick: {proc_tick if proc_tick is not None else '-'}"
+            )
 
         # Boredom from status file (NT4 Bored X)
         boredom_text = "Engagement: unknown"
@@ -1123,50 +1777,64 @@ class GaiaConfigUI(tk.Tk):
                         except Exception:
                             bored_val = None
                         if bored_val is not None:
-                            if bored_val >= 0.5:
-                                boredom_text = "Engagement: BORED"
-                            else:
-                                boredom_text = "Engagement: exploring"
+                            boredom_text = "Engagement: BORED" if bored_val >= 0.5 else "Engagement: exploring"
                         break
         except FileNotFoundError:
             boredom_text = "Engagement: (no status file)"
-        self.summary_boredom_label.config(text=boredom_text)
 
-        # Afferent table
-        self.summary_aff_tree.delete(*self.summary_aff_tree.get_children())
-        for idx in sorted(afferents.keys()):
-            d = afferents[idx]
-            val = d.get("Value", "")
-            goal = d.get("Goal", "")
-            dev = d.get("Dev", "")
-            self.summary_aff_tree.insert(
-                "", tk.END,
-                values=(f"A{idx}", val, goal, dev)
-            )
+        if hasattr(self, "summary_boredom_label"):
+            self.summary_boredom_label.config(text=boredom_text)
 
-        # Efferent table
-        self.summary_eff_tree.delete(*self.summary_eff_tree.get_children())
-        for idx in sorted(efferents.keys()):
-            d = efferents[idx]
-            val = d.get("Value", "")
-            self.summary_eff_tree.insert(
-                "", tk.END,
-                values=(f"E{idx}", val)
-            )
+        # Update tables (if present)
+        if hasattr(self, "summary_aff_tree"):
+            self.summary_aff_tree.delete(*self.summary_aff_tree.get_children())
+            for idx in sorted(afferents.keys()):
+                d = afferents[idx]
+                val = d.get("Value", "")
+                goal = d.get("Goal", "")
+                dev = d.get("Dev", "")
+                self.summary_aff_tree.insert("", tk.END, values=(f"A{idx}", val, goal, dev))
+
+        if hasattr(self, "summary_eff_tree"):
+            self.summary_eff_tree.delete(*self.summary_eff_tree.get_children())
+            for idx in sorted(efferents.keys()):
+                d = efferents[idx]
+                val = d.get("Value", "")
+                self.summary_eff_tree.insert("", tk.END, values=(f"E{idx}", val))
+
+        # Update dashboard rows/plots
+        if hasattr(self, "_dashboard_refresh_from_status"):
+            self._dashboard_refresh_from_status(engine, afferents, efferents)
 
         self.status_var.set("Summary / Goals updated.")
 
+
     def on_summary_auto_toggle(self):
+        # Ensure only one timer is running
         if self.summary_auto_var.get():
-            self._schedule_summary_refresh()
+            if self._summary_after_id is None:
+                self._schedule_summary_refresh()
+        else:
+            if self._summary_after_id is not None:
+                try:
+                    self.after_cancel(self._summary_after_id)
+                except Exception:
+                    pass
+                self._summary_after_id = None
+
 
     def _schedule_summary_refresh(self):
         if not self.summary_auto_var.get():
+            self._summary_after_id = None
             return
-        self.refresh_summary()
-        self.after(1000, self._schedule_summary_refresh)
 
-    # --- I/O tab -----------------------------------------------------------
+        # pull latest status + extend history + redraw dashboard
+        self.refresh_summary()
+
+        # reschedule
+        self._summary_after_id = self.after(1000, self._schedule_summary_refresh)
+
+
     def _get_selected_io_path(self):
         """Return the file path for the currently selected I/O row, or None."""
         sel = self.io_tree.selection()

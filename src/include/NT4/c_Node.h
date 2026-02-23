@@ -865,7 +865,11 @@ public:
         std::cout << " --- Dendrites: ";
         for (int cou_D = 0; cou_D < Dendrite_Count; cou_D++)
         {
-            std::cout << " [" << cou_D << "] " << Dendrites[cou_D]->NID << " Weight: " << Dendrite_Weights[cou_D] << " | ";
+            std::cout << " [" << cou_D << "] " << Dendrites[cou_D]->NID;
+			if (Dendrite_Weights[cou_D] > 1)
+			{
+				std::cout << " Weight: " << Dendrite_Weights[cou_D] << " | ";
+			}
         }
         std::cout << " --- Axon_Hillock_Count: " << Axon_Hillock_Count;
         for (int cou_H = 0; cou_H < Axon_Hillock_Count; cou_H++)
