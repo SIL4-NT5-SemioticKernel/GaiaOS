@@ -1,6 +1,6 @@
 help
 
-setup_Gaia 5 1 3 50 50 10
+setup_Gaia 10 1 3 50 50 10
 set_Afferent_Bands 0 25 50 5
 
 

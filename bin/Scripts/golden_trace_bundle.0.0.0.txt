@@ -3,7 +3,42 @@
 # BLUE CHUNK: 20 → 25
 # =========================
 
-# --- 5 wipe ticks at 20, no encode ---
+# --- 10 wipe ticks at 20, no encode ---
+shift_Data
+set_Afferent_Value 0 20
+set_Efferent_Value 0 0
+set_Efferent_Value 1 0
+set_Efferent_Value 2 0
+output_AE
+
+shift_Data
+set_Afferent_Value 0 20
+set_Efferent_Value 0 0
+set_Efferent_Value 1 0
+set_Efferent_Value 2 0
+output_AE
+
+shift_Data
+set_Afferent_Value 0 20
+set_Efferent_Value 0 0
+set_Efferent_Value 1 0
+set_Efferent_Value 2 0
+output_AE
+
+shift_Data
+set_Afferent_Value 0 20
+set_Efferent_Value 0 0
+set_Efferent_Value 1 0
+set_Efferent_Value 2 0
+output_AE
+
+shift_Data
+set_Afferent_Value 0 20
+set_Efferent_Value 0 0
+set_Efferent_Value 1 0
+set_Efferent_Value 2 0
+output_AE
+
 shift_Data
 set_Afferent_Value 0 20
 set_Efferent_Value 0 0
@@ -102,7 +137,58 @@ output_Scaffolds
 output_NNet
 
 
-# --- 5-tick flat at 25, no efferent ---
+# --- 10-tick flat at 25, no efferent ---
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+
 shift_Data
 set_Afferent_Value 0 25
 set_Efferent_Value 0 0
@@ -258,7 +344,56 @@ output_Scaffolds
 output_NNet
 
 
-# --- 5-tick flat at 25, efferent [1] associated ---
+# --- 10-tick flat at 25, efferent [1] associated ---
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
+
+shift_Data
+set_Afferent_Value 0 25
+set_Efferent_Value 0 0
+set_Efferent_Value 1 1
+set_Efferent_Value 2 0
+output_AE
+encode
+output_Scaffolds
+output_NNet
 shift_Data
 set_Afferent_Value 0 25
 set_Efferent_Value 0 0
